@@ -1,0 +1,220 @@
+# ──────────────────────────────────────────────
+#  Secrets & credentials
+# ──────────────────────────────────────────────
+.env
+.env.*
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+kaggle.json
+secrets/
+credentials/
+
+# ──────────────────────────────────────────────
+#  Python
+# ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.eggs/
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+/.vscode/
+
+# ──────────────────────────────────────────────
+#  Package managers
+# ──────────────────────────────────────────────
+# uv.lock is intentionally tracked for reproducibility
+
+# ──────────────────────────────────────────────
+#  Virtual environments
+# ──────────────────────────────────────────────
+.venv/
+venv/
+venv*/
+env/
+env*/
+.pyenv/
+.conda/
+conda-meta/
+
+# ──────────────────────────────────────────────
+#  Jupyter / IPython
+# ──────────────────────────────────────────────
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# ──────────────────────────────────────────────
+#  Testing & coverage
+# ──────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+*.hypothesis/
+nosetests.xml
+test-results/
+junit*.xml
+
+# ──────────────────────────────────────────────
+#  Type checking & linting
+# ──────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+
+# ──────────────────────────────────────────────
+#  Data — raw, intermediate & output
+# ──────────────────────────────────────────────
+# Raw source files (downloaded from Kaggle / external sources)
+# Note: `dir/*` + `!dir/.gitkeep` is necessary because git won't descend
+# into a directory that is itself fully ignored, making negation rules
+# inside it unreachable.
+data/raw/*
+!data/raw/.gitkeep
+# Intermediate pipeline outputs
+data/processed/*
+!data/processed/.gitkeep
+data/cleaned/*
+!data/cleaned/.gitkeep
+data/features/*
+!data/features/.gitkeep
+data/output/*
+!data/output/.gitkeep
+# Submission files
+data/submissions/*
+!data/submissions/.gitkeep
+
+# Common data file formats
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npz
+*.npy
+*.sqlite
+*.db
+*.arrow
+*.csv.gz
+*.csv.bz2
+*.csv.xz
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.7z
+*.rar
+
+# ──────────────────────────────────────────────
+#  ML artefacts
+# ──────────────────────────────────────────────
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/models/
+artifacts/models/*
+!artifacts/models/.gitkeep
+*.joblib
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.bin
+*.ckpt
+
+# ──────────────────────────────────────────────
+#  Reports (auto-generated)
+# ──────────────────────────────────────────────
+reports/*
+!reports/.gitkeep
+!reports/figures/
+!reports/metrics/
+reports/figures/eda_images/*
+!reports/figures/eda_images/.gitkeep
+reports/figures/eda_tabular/*
+!reports/figures/eda_tabular/.gitkeep
+reports/figures/eda_text/*
+!reports/figures/eda_text/.gitkeep
+reports/metrics/*
+!reports/metrics/.gitkeep
+
+# ──────────────────────────────────────────────
+#  OS junk
+# ──────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ──────────────────────────────────────────────
+#  IDE / editor
+# ──────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*.swn
+*~
+.project
+.classpath
+.settings/
+
+# Keep VS Code settings that are project-relevant but ignore personal ones
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# ──────────────────────────────────────────────
+#  Logs & temp files
+# ──────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+logs/
+tmp/
+temp/
+
+# ──────────────────────────────────────────────
+#  Documentation build artefacts
+# ──────────────────────────────────────────────
+docs/_build/
+docs/site/
+site/
+.sphinx/
+
+# ──────────────────────────────────────────────
+#  Docker
+# ──────────────────────────────────────────────
+.docker/
+docker-compose.override.yml
