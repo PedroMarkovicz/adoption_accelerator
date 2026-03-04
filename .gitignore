@@ -69,7 +69,7 @@ htmlcov/
 nosetests.xml
 test-results/
 junit*.xml
-
+docs/
 # ──────────────────────────────────────────────
 #  Type checking & linting
 # ──────────────────────────────────────────────

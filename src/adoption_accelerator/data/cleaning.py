@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import logging
 import unicodedata
-from typing import Any
+from typing import Any, Tuple
+import re
 
 import pandas as pd
 
@@ -37,47 +38,79 @@ logger = logging.getLogger("adoption_accelerator")
 # ────────────────────────────────────────────────────────────────────
 
 
-def handle_missing_names(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Standardize null / empty / placeholder ``Name`` values and add ``has_name`` flag.
+def handle_missing_names(df: pd.DataFrame) -> Tuple[pd.DataFrame, dict[str, Any]]:
+    """
+    Standardize null / empty / placeholder ``Name`` values and add ``has_name`` flag.
 
-    Rules applied in order:
+    Cleaning Rules (applied in order):
 
-    1. Empty strings ``""`` and whitespace-only strings → ``NaN``
-    2. Placeholder patterns (e.g. "No Name", "Unnamed", "None",
-       "N/A", "Unknown", dashes, dots, question marks) → ``NaN``
-    3. Numeric-only strings (e.g. "12345") → ``NaN``
-    4. Symbol-only strings (no alphanumeric characters) → ``NaN``
-    5. ``has_name`` = 1 if Name is still non-null after cleaning, else 0
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame with a ``Name`` column.
+    1. Empty or whitespace-only → NaN
+    2. Placeholder patterns (e.g., "No Name", "No Name Yet", "Unnamed",
+       "None", "N/A", "Unknown") → NaN
+    3. Numeric-only strings (e.g., "12345") → NaN
+    4. Symbol-only strings (no alphanumeric characters) → NaN
+    5. Add binary column ``has_name``
 
     Returns
     -------
-    tuple[pd.DataFrame, dict]
-        (modified DataFrame, cleaning log entry)
+    Tuple[pd.DataFrame, dict]
+        Cleaned DataFrame and log dictionary.
     """
+
+    if "Name" not in df.columns:
+        raise KeyError("Column 'Name' not found in DataFrame.")
+
     df = df.copy()
+
     before_nulls = int(df["Name"].isna().sum())
 
-    # 1. Normalize empties / whitespace-only → NaN
-    df["Name"] = df["Name"].replace(r"^\s*$", pd.NA, regex=True)
-    df.loc[df["Name"].isna(), "Name"] = pd.NA
+    # ------------------------------------------------------------------
+    # 1️⃣ Normalize values
+    # ------------------------------------------------------------------
+    name_series = (
+        df["Name"]
+        .astype("string")  # ensures safe string ops
+        .str.strip()  # remove surrounding whitespace
+    )
 
-    after_empty_fix = int(df["Name"].isna().sum())
+    # Empty strings → NA
+    name_series = name_series.replace(r"^\s*$", pd.NA, regex=True)
+
+    after_empty_fix = int(name_series.isna().sum())
     empty_converted = after_empty_fix - before_nulls
 
-    # 2-4. Detect placeholder / numeric-only / symbol-only patterns
-    _PLACEHOLDER_RE = r"(?i)^(no\s*name|unnamed|none|n/?a|unknown|\-+|\.+|\?+)$"
-    _NUMERIC_ONLY_RE = r"^\d+$"
-    _SYMBOL_ONLY_RE = r"^[^a-zA-Z0-9\s]+$"
+    # Work on non-null strings for pattern detection
+    name_str = name_series.fillna("")
 
-    name_str = df["Name"].fillna("")
-    is_placeholder = name_str.str.match(_PLACEHOLDER_RE)
-    is_numeric = name_str.str.match(_NUMERIC_ONLY_RE)
-    is_symbol = name_str.str.match(_SYMBOL_ONLY_RE)
+    # ------------------------------------------------------------------
+    # 2️⃣ Placeholder detection
+    # ------------------------------------------------------------------
+    PLACEHOLDER_PATTERNS = [
+        r"^no\s*name\b.*$",  # "No Name", "No Name Yet"
+        r"^unnamed\b.*$",  # "Unnamed", "Unnamed 01"
+        r"^none$",
+        r"^n/?a$",
+        r"^unknown$",
+        r"^\-+$",
+        r"^\.+$",
+        r"^\?+$",
+    ]
+
+    placeholder_regex = re.compile("|".join(PLACEHOLDER_PATTERNS), flags=re.IGNORECASE)
+
+    is_placeholder = name_str.str.match(placeholder_regex)
+
+    # ------------------------------------------------------------------
+    # 3️⃣ Numeric-only
+    # ------------------------------------------------------------------
+    is_numeric = name_str.str.fullmatch(r"\d+")
+
+    # ------------------------------------------------------------------
+    # 4️⃣ Symbol-only (no alphanumeric characters)
+    # ------------------------------------------------------------------
+    is_symbol = name_str.str.fullmatch(r"[^\w\s]+")
+
+    # Combined noisy mask
     noisy_mask = is_placeholder | is_numeric | is_symbol
 
     n_placeholder = int(is_placeholder.sum())
@@ -85,14 +118,21 @@ def handle_missing_names(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]
     n_symbol = int(is_symbol.sum())
     n_noisy = int(noisy_mask.sum())
 
-    # Set noisy names to NaN
-    df.loc[noisy_mask, "Name"] = pd.NA
+    # Apply cleaning
+    name_series[noisy_mask] = pd.NA
+
+    df["Name"] = name_series
 
     after_nulls = int(df["Name"].isna().sum())
 
-    # 5. Create binary flag
-    df["has_name"] = (~df["Name"].isna()).astype(int)
+    # ------------------------------------------------------------------
+    # 5️⃣ Create binary flag
+    # ------------------------------------------------------------------
+    df["has_name"] = df["Name"].notna().astype(int)
 
+    # ------------------------------------------------------------------
+    # Logging dictionary
+    # ------------------------------------------------------------------
     log_entry = {
         "step": "handle_missing_names",
         "before_nulls": before_nulls,
@@ -104,11 +144,18 @@ def handle_missing_names(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]
         "total_noisy_converted": n_noisy,
         "has_name_added": True,
     }
+
     logger.info(
         "handle_missing_names: %d empty→NaN, %d noisy→NaN "
         "(placeholder=%d, numeric=%d, symbol=%d), %d total nulls, has_name flag added",
-        empty_converted, n_noisy, n_placeholder, n_numeric, n_symbol, after_nulls,
+        empty_converted,
+        n_noisy,
+        n_placeholder,
+        n_numeric,
+        n_symbol,
+        after_nulls,
     )
+
     return df, log_entry
 
 
@@ -147,7 +194,11 @@ def normalize_text_fields(
 
         # Normalize Unicode to NFC
         df[col] = df[col].apply(
-            lambda x: unicodedata.normalize("NFC", x) if isinstance(x, str) and x != "<NA>" else x
+            lambda x: (
+                unicodedata.normalize("NFC", x)
+                if isinstance(x, str) and x != "<NA>"
+                else x
+            )
         )
 
         # Restore NaN where appropriate
@@ -207,7 +258,9 @@ def fix_invalid_codes(
         "invalid_values_found": invalid_values,
         "fallback": fallback,
     }
-    logger.info("fix_invalid_codes [%s]: %d fixes (fallback=%d)", col, fix_count, fallback)
+    logger.info(
+        "fix_invalid_codes [%s]: %d fixes (fallback=%d)", col, fix_count, fallback
+    )
     return df, log_entry
 
 
@@ -288,7 +341,13 @@ def enforce_dtypes(
 
             casts.append({"column": spec.name, "from": current_dtype, "to": target})
         except (ValueError, TypeError) as exc:
-            logger.warning("Could not cast %s from %s to %s: %s", spec.name, current_dtype, target, exc)
+            logger.warning(
+                "Could not cast %s from %s to %s: %s",
+                spec.name,
+                current_dtype,
+                target,
+                exc,
+            )
 
     log_entry = {
         "step": "enforce_dtypes",
@@ -365,12 +424,16 @@ def clean_tabular(
 
     # Step 7: Fix invalid State codes (defensive)
     valid_state_ids = set(ref_states["StateID"].unique())
-    df, log = fix_invalid_codes(df, "State", valid_state_ids, fallback=int(ref_states["StateID"].mode().iloc[0]))
+    df, log = fix_invalid_codes(
+        df, "State", valid_state_ids, fallback=int(ref_states["StateID"].mode().iloc[0])
+    )
     cleaning_log.append(log)
 
     # Step 8: Enforce canonical dtypes
     df, log = enforce_dtypes(df, schema)
     cleaning_log.append(log)
 
-    logger.info("── Cleaning [%s] complete — %d steps applied ──", split, len(cleaning_log))
+    logger.info(
+        "── Cleaning [%s] complete — %d steps applied ──", split, len(cleaning_log)
+    )
     return df, cleaning_log

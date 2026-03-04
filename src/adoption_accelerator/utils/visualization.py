@@ -50,8 +50,8 @@ ADOPTION_SPEED_LABELS = {
 }
 
 ADOPTION_SPEED_PALETTE = {
-    0: "#2ecc71",
-    1: "#27ae60",
+    0: "#4dec8f",
+    1: "#359760",
     2: "#f39c12",
     3: "#e67e22",
     4: "#e74c3c",
@@ -86,7 +86,9 @@ def plot_target_distribution(
 
     fig, ax = plt.subplots(figsize=figsize)
     colors = [ADOPTION_SPEED_PALETTE.get(i, "#95a5a6") for i in counts.index]
-    bars = ax.bar(counts.index, counts.values, color=colors, edgecolor="white", width=0.7)
+    bars = ax.bar(
+        counts.index, counts.values, color=colors, edgecolor="white", width=0.7
+    )
 
     for bar, pct in zip(bars, pcts.values):
         ax.text(
@@ -101,7 +103,9 @@ def plot_target_distribution(
 
     ax.set_xlabel("Adoption Speed Class", fontsize=12)
     ax.set_ylabel("Count", fontsize=12)
-    ax.set_title("Target Variable Distribution — AdoptionSpeed", fontsize=14, fontweight="bold")
+    ax.set_title(
+        "Target Variable Distribution — AdoptionSpeed", fontsize=14, fontweight="bold"
+    )
     ax.set_xticks(counts.index)
     ax.set_xticklabels(
         [f"{i}\n{ADOPTION_SPEED_LABELS.get(i, '')}" for i in counts.index],
@@ -119,48 +123,81 @@ def plot_numeric_distribution(
     target_col: Optional[str] = None,
     *,
     figsize: tuple[float, float] = (14, 5),
+    bins: int = 18,
 ) -> plt.Figure:
-    """Generate histogram + box plot for a numeric column.
-
-    If *target_col* is provided, distributions are grouped by target class.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-    col : str
-        Numeric column name.
-    target_col : str, optional
-        Target column for grouping.
-    figsize : tuple, optional
-
-    Returns
-    -------
-    matplotlib.figure.Figure
     """
+    Histogram + box plot for a numeric column.
+
+    Uses side-by-side (dodged) histograms when grouped by target
+    to avoid overlapping classes.
+    """
+
     fig, axes = plt.subplots(1, 2, figsize=figsize)
 
-    # Histogram
+    # ─────────────────────────────────────────────
+    # 1️⃣ Histogram (side-by-side bars)
+    # ─────────────────────────────────────────────
     if target_col:
-        for cls in sorted(df[target_col].unique()):
-            subset = df.loc[df[target_col] == cls, col].dropna()
-            axes[0].hist(
-                subset,
-                bins=40,
-                alpha=0.5,
+        classes = sorted(df[target_col].dropna().unique())
+        n_classes = len(classes)
+
+        data = df[[col, target_col]].dropna()
+
+        # Compute global bin edges
+        counts, bin_edges = np.histogram(data[col], bins=bins)
+
+        bin_width = bin_edges[1] - bin_edges[0]
+        class_width = bin_width / n_classes
+
+        for i, cls in enumerate(classes):
+            subset = data.loc[data[target_col] == cls, col]
+
+            hist_counts, _ = np.histogram(subset, bins=bin_edges)
+
+            # Shift each class inside the bin
+            shift = (i - n_classes / 2) * class_width + class_width / 2
+
+            axes[0].bar(
+                bin_edges[:-1] + shift,
+                hist_counts,
+                width=class_width,
+                color=ADOPTION_SPEED_PALETTE.get(cls),
+                edgecolor="white",
+                linewidth=0.5,
+                alpha=0.9,
                 label=f"Class {cls}",
-                color=ADOPTION_SPEED_PALETTE.get(cls, None),
+                align="edge",
             )
-        axes[0].legend(fontsize=9)
+
+        axes[0].legend(
+            title=target_col,
+            fontsize=9,
+            title_fontsize=10,
+            frameon=False,
+        )
+
     else:
-        axes[0].hist(df[col].dropna(), bins=40, color="#3498db", edgecolor="white")
+        axes[0].hist(
+            df[col].dropna(),
+            bins=bins,
+            color="#3498db",
+            edgecolor="white",
+            linewidth=0.5,
+        )
 
     axes[0].set_title(f"Distribution of {col}", fontsize=13, fontweight="bold")
     axes[0].set_xlabel(col, fontsize=11)
     axes[0].set_ylabel("Frequency", fontsize=11)
 
-    # Box plot
+    # ─────────────────────────────────────────────
+    # 2️⃣ Box Plot
+    # ─────────────────────────────────────────────
     if target_col:
-        palette = [ADOPTION_SPEED_PALETTE.get(c, "#95a5a6") for c in sorted(df[target_col].unique())]
+        palette = [
+            ADOPTION_SPEED_PALETTE.get(c, "#95a5a6")
+            for c in sorted(df[target_col].unique())
+        ]
+
         sns.boxplot(
             data=df,
             x=target_col,
@@ -168,14 +205,23 @@ def plot_numeric_distribution(
             palette=palette,
             ax=axes[1],
             fliersize=2,
+            linewidth=1.2,
         )
+
         axes[1].set_title(f"{col} by {target_col}", fontsize=13, fontweight="bold")
     else:
-        sns.boxplot(data=df, y=col, color="#3498db", ax=axes[1], fliersize=2)
+        sns.boxplot(
+            data=df,
+            y=col,
+            color="#3498db",
+            ax=axes[1],
+            fliersize=2,
+        )
         axes[1].set_title(f"Box Plot — {col}", fontsize=13, fontweight="bold")
 
     sns.despine(ax=axes[0])
     sns.despine(ax=axes[1])
+
     fig.tight_layout()
     return fig
 
@@ -191,26 +237,12 @@ def plot_categorical_distribution(
 ) -> plt.Figure:
     """Generate bar chart for a categorical column.
 
-    If *target_col* is provided, produces a stacked/grouped proportional bar chart.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-    col : str
-        Categorical column name.
-    target_col : str, optional
-        Target column for stacking.
-    figsize : tuple, optional
-    top_n : int, optional
-        Show only the top-N most frequent categories.
-    label_map : dict, optional
-        Map from raw values to human-readable labels.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
+    If *target_col* is provided, produces a stacked proportional bar chart
+    with percentage labels inside each segment.
     """
+
     data = df.copy()
+
     if top_n is not None:
         top_cats = data[col].value_counts().head(top_n).index
         data = data[data[col].isin(top_cats)]
@@ -218,9 +250,12 @@ def plot_categorical_distribution(
     fig, ax = plt.subplots(figsize=figsize)
 
     if target_col:
+        # ----- Stacked proportional bar -----
         ct = pd.crosstab(data[col], data[target_col], normalize="index") * 100
         ct = ct.sort_index()
+
         colors = [ADOPTION_SPEED_PALETTE.get(c, "#95a5a6") for c in ct.columns]
+
         ct.plot(
             kind="bar",
             stacked=True,
@@ -229,7 +264,25 @@ def plot_categorical_distribution(
             edgecolor="white",
             width=0.75,
         )
+
         ax.set_ylabel("Proportion (%)", fontsize=11)
+
+        # Add percentage labels inside bars
+        for container in ax.containers:
+            for bar in container:
+                height = bar.get_height()
+                if height > 5:  # avoid clutter for very small segments
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_y() + height / 2,
+                        f"{height:.1f}%",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        color="white",
+                        fontweight="bold",
+                    )
+
         ax.legend(
             title=target_col,
             fontsize=9,
@@ -237,13 +290,36 @@ def plot_categorical_distribution(
             bbox_to_anchor=(1.02, 1),
             loc="upper left",
         )
+
     else:
+        # ----- Standard count bar -----
         counts = data[col].value_counts().sort_index()
-        ax.bar(range(len(counts)), counts.values, color="#3498db", edgecolor="white")
+
+        bars = ax.bar(
+            range(len(counts)),
+            counts.values,
+            color="#3498db",
+            edgecolor="white",
+        )
+
         ax.set_xticks(range(len(counts)))
         ax.set_xticklabels(counts.index, fontsize=10)
         ax.set_ylabel("Count", fontsize=11)
 
+        # Add count labels on top
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                height,
+                f"{int(height)}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
+
+    # ----- Label mapping -----
     if label_map:
         current_labels = [tick.get_text() for tick in ax.get_xticklabels()]
         new_labels = []
@@ -261,8 +337,10 @@ def plot_categorical_distribution(
         fontsize=13,
         fontweight="bold",
     )
+
     sns.despine(ax=ax)
     fig.tight_layout()
+
     return fig
 
 
@@ -310,7 +388,9 @@ def plot_correlation_matrix(
         cbar_kws={"shrink": 0.8},
         annot_kws={"fontsize": 8},
     )
-    ax.set_title(f"Correlation Matrix ({method.title()})", fontsize=14, fontweight="bold")
+    ax.set_title(
+        f"Correlation Matrix ({method.title()})", fontsize=14, fontweight="bold"
+    )
     fig.tight_layout()
     return fig
 
@@ -470,56 +550,88 @@ def plot_text_length_distributions(
     stats_df: pd.DataFrame,
     target: pd.Series | None = None,
     *,
-    figsize: tuple[float, float] = (16, 10),
+    figsize: tuple[float, float] = (18, 10),
+    bins: int = 15,
 ) -> plt.Figure:
-    """Plot text length distributions, optionally grouped by target class.
-
-    Creates a 2×3 grid: histograms (top row) and box plots (bottom row) for
-    ``char_length``, ``word_count``, and ``sentence_count``.
-
-    Parameters
-    ----------
-    stats_df : pd.DataFrame
-        Output of :func:`compute_text_statistics`.
-    target : pd.Series, optional
-        AdoptionSpeed values for grouping.
-    figsize : tuple, optional
-
-    Returns
-    -------
-    matplotlib.figure.Figure
     """
+    Plot text length distributions with clearly separated AdoptionSpeed classes.
+
+    Uses side-by-side (dodged) histograms when grouped by target
+    to avoid overlapping classes.
+    """
+
     cols = ["char_length", "word_count", "sentence_count"]
     titles = ["Character Length", "Word Count", "Sentence Count"]
 
     fig, axes = plt.subplots(2, 3, figsize=figsize)
 
     for i, (col, title) in enumerate(zip(cols, titles)):
-        # Histogram
+        # ─────────────────────────────────────────────
+        # 1️⃣ Histogram (side-by-side bars)
+        # ─────────────────────────────────────────────
         ax_hist = axes[0, i]
+
         if target is not None:
-            for cls in sorted(target.unique()):
-                mask = target == cls
-                ax_hist.hist(
-                    stats_df.loc[mask, col].dropna(),
-                    bins=40,
-                    alpha=0.5,
+            data = pd.DataFrame({col: stats_df[col], TARGET_COL_NAME: target}).dropna()
+            classes = sorted(data[TARGET_COL_NAME].unique())
+            n_classes = len(classes)
+
+            # Global bins
+            _, bin_edges = np.histogram(data[col], bins=bins)
+            bin_width = bin_edges[1] - bin_edges[0]
+            class_width = (bin_width / n_classes) * 0.9
+
+            for j, cls in enumerate(classes):
+                subset = data.loc[data[TARGET_COL_NAME] == cls, col]
+                hist_counts, _ = np.histogram(subset, bins=bin_edges)
+
+                shift = (j - n_classes / 2) * class_width + class_width / 2
+
+                ax_hist.bar(
+                    bin_edges[:-1] + shift,
+                    hist_counts,
+                    width=class_width,
+                    color=ADOPTION_SPEED_PALETTE.get(cls),
+                    edgecolor="white",
+                    linewidth=0.5,
                     label=f"Class {cls}",
-                    color=ADOPTION_SPEED_PALETTE.get(cls, None),
+                    align="edge",
                 )
-            ax_hist.legend(fontsize=8)
+
+            ax_hist.legend(
+                title=TARGET_COL_NAME,
+                fontsize=8,
+                title_fontsize=9,
+                frameon=False,
+            )
+
         else:
-            ax_hist.hist(stats_df[col].dropna(), bins=40, color="#3498db", edgecolor="white")
+            ax_hist.hist(
+                stats_df[col].dropna(),
+                bins=bins,
+                color="#3498db",
+                edgecolor="white",
+                linewidth=0.5,
+            )
+
         ax_hist.set_title(f"Distribution of {title}", fontsize=11, fontweight="bold")
         ax_hist.set_xlabel(title, fontsize=10)
         ax_hist.set_ylabel("Frequency", fontsize=10)
         sns.despine(ax=ax_hist)
 
-        # Box plot
+        # ─────────────────────────────────────────────
+        # 2️⃣ Box Plot
+        # ─────────────────────────────────────────────
         ax_box = axes[1, i]
+
         if target is not None:
             plot_df = pd.DataFrame({col: stats_df[col], TARGET_COL_NAME: target})
-            palette = [ADOPTION_SPEED_PALETTE.get(c, "#95a5a6") for c in sorted(target.unique())]
+
+            palette = [
+                ADOPTION_SPEED_PALETTE.get(c, "#95a5a6")
+                for c in sorted(target.unique())
+            ]
+
             sns.boxplot(
                 data=plot_df,
                 x=TARGET_COL_NAME,
@@ -527,15 +639,30 @@ def plot_text_length_distributions(
                 palette=palette,
                 ax=ax_box,
                 fliersize=2,
+                linewidth=1.2,
             )
-            ax_box.set_title(f"{title} by {TARGET_COL_NAME}", fontsize=11, fontweight="bold")
+
+            ax_box.set_title(
+                f"{title} by {TARGET_COL_NAME}",
+                fontsize=11,
+                fontweight="bold",
+            )
+
         else:
-            sns.boxplot(data=stats_df, y=col, color="#3498db", ax=ax_box, fliersize=2)
+            sns.boxplot(
+                data=stats_df,
+                y=col,
+                color="#3498db",
+                ax=ax_box,
+                fliersize=2,
+            )
             ax_box.set_title(f"Box Plot — {title}", fontsize=11, fontweight="bold")
+
         sns.despine(ax=ax_box)
 
-    fig.suptitle("Text Length Distributions", fontsize=14, fontweight="bold", y=1.01)
+    fig.suptitle("Text Length Distributions", fontsize=14, fontweight="bold", y=1.02)
     fig.tight_layout()
+
     return fig
 
 
@@ -581,7 +708,9 @@ def plot_sentiment_distributions(
                 )
             ax_hist.legend(fontsize=8)
         else:
-            ax_hist.hist(sentiment_df[col].dropna(), bins=40, color="#3498db", edgecolor="white")
+            ax_hist.hist(
+                sentiment_df[col].dropna(), bins=40, color="#3498db", edgecolor="white"
+            )
         ax_hist.set_title(f"Distribution of {title}", fontsize=11, fontweight="bold")
         ax_hist.set_xlabel(title, fontsize=10)
         ax_hist.set_ylabel("Frequency", fontsize=10)
@@ -590,7 +719,10 @@ def plot_sentiment_distributions(
         ax_box = axes[1, i]
         if target is not None:
             plot_df = pd.DataFrame({col: sentiment_df[col], TARGET_COL_NAME: target})
-            palette = [ADOPTION_SPEED_PALETTE.get(c, "#95a5a6") for c in sorted(target.unique())]
+            palette = [
+                ADOPTION_SPEED_PALETTE.get(c, "#95a5a6")
+                for c in sorted(target.unique())
+            ]
             sns.boxplot(
                 data=plot_df,
                 x=TARGET_COL_NAME,
@@ -599,9 +731,13 @@ def plot_sentiment_distributions(
                 ax=ax_box,
                 fliersize=2,
             )
-            ax_box.set_title(f"{title} by {TARGET_COL_NAME}", fontsize=11, fontweight="bold")
+            ax_box.set_title(
+                f"{title} by {TARGET_COL_NAME}", fontsize=11, fontweight="bold"
+            )
         else:
-            sns.boxplot(data=sentiment_df, y=col, color="#3498db", ax=ax_box, fliersize=2)
+            sns.boxplot(
+                data=sentiment_df, y=col, color="#3498db", ax=ax_box, fliersize=2
+            )
             ax_box.set_title(f"Box Plot — {title}", fontsize=11, fontweight="bold")
         sns.despine(ax=ax_box)
 

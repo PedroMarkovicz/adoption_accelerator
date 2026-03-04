@@ -1,0 +1,86 @@
+# ───────────────────────────────────────────────────────────────────
+# Baseline Training Configuration
+# Notebook: 11_modeling_baseline
+# ───────────────────────────────────────────────────────────────────
+
+# Feature version consumed by the modeling phase
+feature_version: "v1"
+
+# Reproducibility
+seed: 42
+
+# Cross-validation
+cv:
+  n_splits: 5
+  stratify_column: "AdoptionSpeed"
+
+# Target
+target:
+  column: "AdoptionSpeed"
+  n_classes: 5
+  class_labels:
+    0: "Same day"
+    1: "1-7 days"
+    2: "8-30 days"
+    3: "31-90 days"
+    4: "100+ days"
+
+# Expected data dimensions (validation gates)
+expected:
+  train_rows: 14993
+  test_rows: 3972
+  n_features: 940
+
+# Baseline models
+models:
+  dummy_most_frequent:
+    type: "DummyClassifier"
+    params:
+      strategy: "most_frequent"
+
+  dummy_stratified:
+    type: "DummyClassifier"
+    params:
+      strategy: "stratified"
+      random_state: 42
+
+  logistic_regression:
+    type: "LogisticRegression"
+    params:
+      multi_class: "multinomial"
+      solver: "lbfgs"
+      max_iter: 1000
+      random_state: 42
+      C: 1.0
+
+  decision_tree:
+    type: "DecisionTreeClassifier"
+    params:
+      random_state: 42
+
+  lightgbm_default:
+    type: "LGBMClassifier"
+    params:
+      n_estimators: 100
+      learning_rate: 0.1
+      num_leaves: 31
+      random_state: 42
+      n_jobs: -1
+      verbose: -1
+
+# Evaluation
+evaluation:
+  primary_metric: "qwk"
+  secondary_metrics:
+    - "accuracy"
+    - "macro_f1"
+    - "weighted_f1"
+  threshold_optimize: true
+
+# Artifact paths (relative to project root)
+artifacts:
+  model_bundle: "artifacts/models/baseline_v1"
+  cv_folds: "artifacts/cv_folds_v1.json"
+  experiment_logs: "reports/metrics/baseline_experiments.json"
+  comparison_table: "reports/metrics/baseline_comparison.json"
+  figures_dir: "reports/figures/modeling"

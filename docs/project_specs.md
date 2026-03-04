@@ -960,8 +960,7 @@ adoption_accelerator/
 │   ├── 11_modeling_baseline.ipynb
 │   ├── 12_modeling_tuning.ipynb
 │   ├── 13_interpretability.ipynb
-│   ├── 14_inference_pipeline_test.ipynb
-│   └── 15_submission.ipynb
+│   └── 14_inference_pipeline_test.ipynb
 │
 │
 │ ── PIPELINES ────────────────────────────────────────────────

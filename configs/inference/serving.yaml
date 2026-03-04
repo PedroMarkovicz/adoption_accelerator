@@ -1,0 +1,61 @@
+# -------------------------------------------------------------------
+# Inference Pipeline Configuration
+# Notebook: 14_inference_pipeline_test
+# -------------------------------------------------------------------
+
+# Model artifact bundle path (relative to project root)
+model:
+  bundle_path: "artifacts/models/tuned_v1"
+  expected_type: "ensemble"
+  expected_cv_qwk: 0.4933
+
+# Feature version consumed
+feature_version: "v1"
+
+# Reproducibility
+seed: 42
+
+# Expected data dimensions (validation gates)
+expected:
+  test_rows: 3972
+  n_features: 940
+
+# Target class metadata
+target:
+  n_classes: 5
+  class_labels:
+    0: "Same-day adoption"
+    1: "Adopted within 1 week"
+    2: "Adopted within 1 month"
+    3: "Adopted within 1-3 months"
+    4: "Not adopted (100+ days)"
+
+# Prediction settings
+prediction:
+  method: "threshold"
+  threshold_source: "model_bundle"
+  probability_tolerance: 1.0e-6
+
+# Batch inference settings
+batch:
+  chunk_size: 1000
+  max_parallel_workers: 1
+
+# Latency targets (seconds)
+latency:
+  per_sample_target: 0.100
+  total_batch_target: 60.0
+
+# Diagnostics settings
+diagnostics:
+  run_degradation_test: true
+  run_reproducibility_test: true
+  latency_profiling_repeats: 3
+  low_confidence_threshold: 0.30
+
+# Output paths (relative to project root)
+output:
+  submission_path: "data/submissions/submission_tuned_v1.csv"
+  predictions_path: "data/output/predictions_tuned_v1.parquet"
+  audit_log_path: "reports/metrics/inference_audit_tuned_v1.json"
+  figures_dir: "reports/figures/inference"

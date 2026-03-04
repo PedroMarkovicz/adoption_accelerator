@@ -1,0 +1,82 @@
+# -------------------------------------------------------------------
+# Tuning Training Configuration
+# Notebook: 12_modeling_tuning
+# -------------------------------------------------------------------
+
+# Feature version consumed by the modeling phase
+feature_version: "v1"
+
+# Reproducibility
+seed: 42
+
+# Cross-validation (must match baseline.yaml)
+cv:
+  n_splits: 5
+  stratify_column: "AdoptionSpeed"
+
+# Target (must match baseline.yaml)
+target:
+  column: "AdoptionSpeed"
+  n_classes: 5
+  class_labels:
+    0: "Same day"
+    1: "1-7 days"
+    2: "8-30 days"
+    3: "31-90 days"
+    4: "100+ days"
+
+# Expected data dimensions (validation gates)
+expected:
+  train_rows: 14993
+  test_rows: 3972
+  n_features: 940
+
+# Optuna tuning settings
+optuna:
+  n_trials_lgbm: 30
+  n_trials_xgb: 30
+  n_trials_catboost: 30
+  timeout_per_study: 7200         # seconds (2 hours per model family)
+  sampler_seed: 42
+
+# Model families to tune
+model_families:
+  - lightgbm
+  - xgboost
+  - catboost
+
+# Overfitting thresholds
+overfitting:
+  warning_gap: 0.05
+  critical_gap: 0.10
+
+# Top-N candidates per family for verification
+top_candidates_per_family: 3
+
+# Evaluation (must match baseline.yaml)
+evaluation:
+  primary_metric: "qwk"
+  secondary_metrics:
+    - "accuracy"
+    - "macro_f1"
+    - "weighted_f1"
+  threshold_optimize: true
+
+# Ensemble settings (optional step)
+ensemble:
+  enabled: true
+  soft_voting: true
+  stacking: false
+
+# Artifact paths (relative to project root)
+artifacts:
+  model_bundle: "artifacts/models/tuned_v1"
+  cv_folds: "artifacts/cv_folds_v1.json"
+  baseline_experiments: "reports/metrics/baseline_experiments.json"
+  baseline_comparison: "reports/metrics/baseline_comparison.json"
+  tuning_experiments: "reports/metrics/tuning_experiments.json"
+  model_comparison: "reports/metrics/model_comparison.json"
+  figures_dir: "reports/figures/modeling"
+  optuna_lgbm: "reports/metrics/optuna_lgbm.json"
+  optuna_xgb: "reports/metrics/optuna_xgb.json"
+  optuna_catboost: "reports/metrics/optuna_catboost.json"
