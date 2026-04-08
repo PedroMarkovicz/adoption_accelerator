@@ -1,0 +1,16 @@
+Pet profile:
+- Type: {pet_type}
+- Age: {age} months
+- Gender: {gender}
+- Breed: {breed}
+- Health: {health}
+- Vaccinated: {vaccinated}
+- Sterilized: {sterilized}
+
+Original description:
+{original_description}
+
+Text analysis insights:
+{text_insights}
+
+Please rewrite this pet listing description to be more compelling and adoption-friendly. Target 150-300 words. Preserve all factual information while making the listing warmer and more engaging.

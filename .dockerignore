@@ -1,0 +1,38 @@
+# Virtual Environments
+.venv/
+venv/
+.pyenv/
+
+# Data and Ephemeral Assets
+data/
+notebooks/
+reports/
+tests/
+configs/training/
+scripts/
+
+# Excluded specific training artifacts
+artifacts/cv_folds_v1.json
+
+# Source Control and Git Metadata
+.git/
+.github/
+
+# Documentation
+docs/
+
+# Python Build Artifacts and Tool Caches
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+
+# Secrets and Ephemeral Files
+.env
+.env.*
+*.log
+logs/
+tmp/

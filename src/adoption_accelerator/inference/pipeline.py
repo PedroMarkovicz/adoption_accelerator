@@ -91,13 +91,26 @@ class InferencePipeline:
         proba = predict_probabilities(self.model, X, n_classes=self.n_classes)
         ev = compute_expected_values(proba)
         preds = apply_thresholds(proba, self.thresholds, n_classes=self.n_classes)
-        confidence = proba.max(axis=1)
+
+        # Confidence = probability of the *thresholded predicted class*.
+        # This ensures "Prediction: class 3, Confidence: 18%" is semantically
+        # consistent — the 18% is the probability assigned to class 3, not to
+        # some other class that happens to have the highest raw probability.
+        # Issue #1 fix: previously was proba.max(axis=1), which picked the
+        # global argmax regardless of which class the thresholds selected.
+        confidence = proba[np.arange(len(preds)), preds]
+
+        # Diagnostic fields — preserve global argmax info for transparency.
+        max_class_probability = proba.max(axis=1)
+        max_class = proba.argmax(axis=1).astype(int)
 
         return {
             "predictions": preds,
             "probabilities": proba,
             "expected_values": ev,
             "confidence": confidence,
+            "max_class_probability": max_class_probability,
+            "max_class": max_class,
         }
 
     def predict_single(self, features: np.ndarray) -> PredictionResult:
@@ -125,6 +138,9 @@ class InferencePipeline:
                 i: float(result["probabilities"][0, i]) for i in range(self.n_classes)
             },
             confidence=float(result["confidence"][0]),
+            predicted_class_probability=float(result["confidence"][0]),
+            max_class_probability=float(result["max_class_probability"][0]),
+            max_class=int(result["max_class"][0]),
             metadata={
                 "model_version": "tuned_v1",
                 "bundle_path": str(self.bundle_path),

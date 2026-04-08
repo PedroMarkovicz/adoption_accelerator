@@ -1,0 +1,28 @@
+A pet listing received the following prediction from our adoption speed model:
+
+Predicted class: {predicted_class} ({prediction_label})
+Confidence: {confidence:.1%} (probability assigned to the predicted class)
+Class probabilities: {class_probabilities}
+
+Pet profile:
+- Type: {pet_type}
+- Age: {age} months
+- Gender: {gender}
+- Fee: {fee}
+- Photos: {photo_count}
+- Has description: {has_description}
+
+Modality contributions to this prediction:
+{modality_breakdown}
+
+Top contributing factors (ranked by importance):
+{top_factors}
+
+## Critical Rules for Modality Consistency
+- If "Has description" is "No" or "Description content: NOT PROVIDED" appears above, you MUST NOT reference description content, text patterns, semantic patterns, or listing text as influencing this prediction. The model had no description to read.
+- If "Has description" is "Yes" and "Description content" appears in the modality contributions above, you MUST acknowledge the description's role. Do NOT claim the listing lacks a description or that description content was not available.
+- If "Photos: 0" or "Photo characteristics: NOT PROVIDED" appears above, you MUST NOT reference photo quality, image patterns, or visual features as influencing this prediction. The model had no images to analyze.
+- When a modality is absent, you MAY note that adding it (e.g. uploading photos or writing a description) could improve adoption speed, but you MUST NOT describe absent content as having already influenced the result.
+- NEVER contradict yourself: do not attribute influence to a modality in one sentence and claim it was absent in another.
+
+Please produce a 3-5 sentence explanation of this prediction in accessible language. Reference the most important factors that were actually present. Respect the critical rules above strictly.

@@ -58,6 +58,34 @@ class PredictionResult(BaseModel):
     prediction: int = Field(..., description="Predicted AdoptionSpeed 0-4")
     prediction_label: str = Field(..., description="Human-readable label")
     probabilities: dict[int, float] = Field(..., description="Per-class probabilities")
-    confidence: float = Field(..., description="Max probability")
+
+    # Issue #1 fix: confidence now reflects the thresholded predicted class
+    # probability, not the global argmax. These two can differ when threshold
+    # optimization selects a class other than the argmax class.
+    confidence: float = Field(
+        ...,
+        description=(
+            "Probability of the thresholded predicted class. "
+            "Semantically: P(predicted_class). "
+            "Use max_class_probability for the global argmax probability."
+        ),
+    )
+    predicted_class_probability: float = Field(
+        0.0,
+        description="Explicit alias for confidence: P(predicted_class).",
+    )
+    max_class_probability: float = Field(
+        0.0,
+        description=(
+            "Probability of the class with the highest raw probability "
+            "(global argmax). May differ from confidence when threshold "
+            "optimization selects a different class."
+        ),
+    )
+    max_class: int = Field(
+        0,
+        description="Class index that holds max_class_probability.",
+    )
+
     explanation: Optional[dict] = None
     metadata: dict = Field(default_factory=dict)

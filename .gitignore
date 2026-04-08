@@ -70,6 +70,9 @@ nosetests.xml
 test-results/
 junit*.xml
 docs/
+tests/e2e_tests/outputs/
+tests/frontend_tests/
+
 # ──────────────────────────────────────────────
 #  Type checking & linting
 # ──────────────────────────────────────────────
@@ -184,6 +187,7 @@ $RECYCLE.BIN/
 .project
 .classpath
 .settings/
+.claude/
 
 # Keep VS Code settings that are project-relevant but ignore personal ones
 .vscode/*

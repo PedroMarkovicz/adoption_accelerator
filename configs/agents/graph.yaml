@@ -1,0 +1,55 @@
+# Graph topology configuration for the agent system.
+
+entry_point: orchestrator
+
+# Node definitions and their execution phases
+nodes:
+  # Phase 1: Deterministic backbone (no LLM)
+  - name: orchestrator
+    phase: 1
+    deterministic: true
+  - name: inference
+    phase: 1
+    deterministic: true
+  # Phase 2: LLM-powered enrichment (future)
+  - name: explainer
+    phase: 2
+    deterministic: false
+  - name: recommender
+    phase: 2
+    deterministic: false
+  - name: description_writer
+    phase: 2
+    deterministic: false
+    conditional: true
+  # Phase 3: Response assembly
+  - name: aggregator
+    phase: 3
+    deterministic: true
+
+# Edge definitions
+edges:
+  # Sequential: orchestrator -> inference
+  - from: orchestrator
+    to: inference
+
+  # Fan-out: inference -> [explainer, recommender, description_writer]
+  - from: inference
+    to:
+      - explainer
+      - recommender
+      - description_writer
+    routing: conditional
+
+  # Fan-in: LLM nodes -> aggregator
+  - from: explainer
+    to: aggregator
+  - from: recommender
+    to: aggregator
+  - from: description_writer
+    to: aggregator
+
+# Conditional routing: description_writer only runs when description is present
+routing_rules:
+  description_writer:
+    condition: request_has_description

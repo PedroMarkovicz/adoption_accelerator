@@ -1,0 +1,38 @@
+A pet listing was predicted as: {predicted_class} ({prediction_label})
+Target: improve to a faster adoption speed class.
+
+Current listing attributes:
+- Photos: {photo_count}
+- Videos: {video_count}
+- Fee: {fee}
+- Vaccinated: {vaccinated}
+- Dewormed: {dewormed}
+- Sterilized: {sterilized}
+- Has name: {has_name}
+- Description length: {description_length} characters
+
+Modality contributions:
+{modality_breakdown}
+
+Top negative factors (features slowing adoption, actionable only):
+{negative_factors}
+
+## Recommendation Rules
+- Do NOT recommend keeping a feature at its current value. If a feature already has an optimal value (e.g., Vaccinated = "Yes"), skip it entirely.
+- Do NOT produce multiple recommendations for the same feature. Each feature should appear at most once. For example, do not suggest "add 1 photo" and then "add 3 more photos" as separate entries.
+- Only suggest changes that would produce a meaningful, measurable improvement.
+- If you cannot find enough meaningful changes, produce fewer recommendations rather than padding with no-op items.
+
+## Impact Estimation Rules
+- Do NOT provide specific percentage estimates for expected impact (e.g., "improve by 20-40%").
+- Describe impact qualitatively using terms like "moderate improvement expected", "significant positive impact", or "minor enhancement".
+- Only cite specific numbers if they come directly from the SHAP magnitude data provided.
+
+Please produce 3-5 ranked recommendations as a JSON array. Each recommendation must be a JSON object with these exact fields:
+- "feature": the feature name to change
+- "current_value": current value as a string
+- "suggested_value": recommended new value as a string
+- "expected_impact": brief description of expected improvement
+- "priority": integer rank (1 = highest priority)
+- "category": one of "photo", "description", "health", "listing_details"
+- "actionable": always true

@@ -1,0 +1,23 @@
+# LLM provider configuration for the agent system.
+# The LLM client is NOT implemented in the deterministic backbone
+# (Steps 1-4).  This config prepares for Step 5 (OpenAI LLM Client Setup).
+
+provider: openai
+model: gpt-5-nano
+
+# Reasoning effort: minimal for latency and cost optimization.
+# Agent nodes perform lightweight text generation, not multi-step planning.
+reasoning:
+  effort: minimal
+
+# Default verbosity for most nodes
+verbosity: low
+
+# Sampling parameters
+temperature: 0.3
+
+# Per-node max output tokens
+max_tokens:
+  explainer: 500
+  recommender: 600
+  description_writer: 800

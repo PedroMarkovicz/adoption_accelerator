@@ -1,0 +1,13 @@
+# Per-node and global timeout settings for the agent system.
+
+# Global timeout for the entire graph execution (seconds)
+global_timeout: 30
+
+# Per-node timeouts (seconds)
+node_timeouts:
+  orchestrator: 2
+  inference: 5
+  explainer: 10
+  recommender: 10
+  description_writer: 15
+  aggregator: 2
