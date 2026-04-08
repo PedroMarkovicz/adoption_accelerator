@@ -300,7 +300,7 @@ Top-3 candidate configurations per architecture family (9 models in total) were 
 
 ### 🎯 Final Model: Soft Voting Ensemble
 
-The production model utilizes a soft-voting ensemble mechanism combining the optimized instances of LightGBM (Ke et al., 2017), XGBoost (Chen & Guestrin, 2016), and CatBoost (Prokhorenkova et al., 2018). This heterogeneous ensemble effectively leverages the distinct algorithmic strengths of each gradient boosting implementation—specifically handling high-cardinality categorical features intrinsically and mitigating heteroscedastic overfitting through disparate regularization strategies. By uniformly averaging the calibrated probability outputs (soft voting) across the constituent models, the predictive layer achieves superior generalization bounds and statistically significant robustness across the ordinal target space.
+The production model utilizes a soft-voting ensemble mechanism combining the optimized instances of LightGBM (Ke et al., 2017), XGBoost (Chen & Guestrin, 2016), and CatBoost (Prokhorenkova et al., 2018). This heterogeneous ensemble effectively leverages the distinct algorithmic strengths of each gradient boosting implementation, specifically handling high-cardinality categorical features intrinsically and mitigating heteroscedastic overfitting through disparate regularization strategies. By uniformly averaging the calibrated probability outputs (soft voting) across the constituent models, the predictive layer achieves superior generalization bounds and statistically significant robustness across the ordinal target space.
 
 ```mermaid
 graph TB
