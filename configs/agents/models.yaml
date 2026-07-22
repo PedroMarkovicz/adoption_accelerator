@@ -1,0 +1,56 @@
+# Model catalog for the agent system.
+# Anatomy: catalog (what exists) / defaults (fallback params) / roles (who uses what).
+# Adding a provider or model is a catalog edit, not a code change.
+
+catalog:
+  gpt-5-nano:
+    api_model: "gpt-5-nano"
+    display_name: "GPT-5 Nano"
+    provider: "openai"
+    supports_vision: false
+    reasoning_kind: "effort"
+    notes: "Cheap text-only workhorse."
+    # USD per 1M tokens. Confirm against https://platform.openai.com/pricing
+    pricing:
+      input_usd_per_1m: 0.05
+      output_usd_per_1m: 0.40
+  gpt-5-mini:
+    api_model: "gpt-5-mini"
+    display_name: "GPT-5 Mini"
+    provider: "openai"
+    supports_vision: true
+    reasoning_kind: "effort"
+    notes: "Vision-capable midrange; default for agentic roles."
+    pricing:
+      input_usd_per_1m: 0.25
+      output_usd_per_1m: 2.00
+  gpt-5:
+    api_model: "gpt-5"
+    display_name: "GPT-5"
+    provider: "openai"
+    supports_vision: true
+    reasoning_kind: "effort"
+    notes: "Escalation option for synthesis quality."
+    pricing:
+      input_usd_per_1m: 1.25
+      output_usd_per_1m: 10.00
+
+defaults:
+  model: "gpt-5-mini"
+  reasoning_effort: "minimal"
+  max_output_tokens: 2048
+
+roles:
+  visual_analyst:
+    model: "gpt-5-mini"
+    reasoning_effort: "low"
+  data_analyst:
+    model: "gpt-5-nano"
+    reasoning_effort: "minimal"
+  recommendation_agent:
+    model: "gpt-5-mini"
+    reasoning_effort: "low"
+    max_output_tokens: 4096
+  synthesizer:
+    model: "gpt-5-mini"
+    reasoning_effort: "low"
