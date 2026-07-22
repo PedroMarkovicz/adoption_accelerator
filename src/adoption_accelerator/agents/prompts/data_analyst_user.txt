@@ -1,0 +1,11 @@
+Prediction: class {predicted_class} ({prediction_label})
+Class probabilities: {class_probabilities}
+Confidence in predicted class: {confidence:.1%}
+
+Modality breakdown:
+{modality_breakdown}
+
+Key drivers (in order):
+{drivers}
+
+Return one reading per key driver, in the same order.
