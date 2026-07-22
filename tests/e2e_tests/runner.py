@@ -1,13 +1,14 @@
 """
-E2E test runner: executes scenarios, collects structured outputs,
-and writes results to JSON files for manual inspection.
+E2E test runner: executes scenarios against the compiled Evidence Board
+graph, collects structured outputs, and writes results to JSON files for
+manual inspection.
 
-Produces one unified JSON file per scenario in the outputs/ directory
-following Option B (preferred) from the requirements.
+Produces one unified JSON file per scenario in the outputs/ directory.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import sys
@@ -16,9 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agents.graph import compile_full_graph
-from agents.observability.metrics import MetricStore
-from agents.observability.tracing import extract_trace_summary
+from adoption_accelerator.agents.graph import compile_report_graph
+from adoption_accelerator.agents.observability.audit import build_audit_record
 
 from tests.e2e_tests.scenarios import TestScenario, build_all_scenarios
 from tests.e2e_tests.validators import ValidationResult, validate_scenario_output
@@ -29,11 +29,7 @@ logger = logging.getLogger(__name__)
 _OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 
 
-def run_scenario(
-    scenario: TestScenario,
-    app: Any,
-    metric_store: MetricStore,
-) -> dict[str, Any]:
+async def run_scenario(scenario: TestScenario, app: Any) -> dict[str, Any]:
     """Execute a single scenario and collect structured output.
 
     Parameters
@@ -41,9 +37,7 @@ def run_scenario(
     scenario : TestScenario
         The scenario definition.
     app : CompiledGraph
-        The compiled full graph.
-    metric_store : MetricStore
-        Metrics collector.
+        The compiled Evidence Board graph.
 
     Returns
     -------
@@ -54,12 +48,9 @@ def run_scenario(
     t0 = time.perf_counter()
 
     # Execute the graph
-    result = app.invoke({"request": scenario.request})
+    result = await app.ainvoke({"request": scenario.request, "errors": [], "trace": []})
 
     execution_time_ms = (time.perf_counter() - t0) * 1000
-
-    # Record metrics
-    metric_store.record_execution(result)
 
     # Extract structured data from the result
     output = _build_scenario_output(scenario, result, execution_time_ms)
@@ -70,11 +61,12 @@ def run_scenario(
     )
     output["validation"] = validation.to_dict()
 
+    report = result.get("report")
     logger.info(
         "Scenario '%s' completed: prediction=%s, time=%.0fms, "
         "checks=%d passed / %d failed",
         scenario.name,
-        output["agents"]["inference"]["prediction"]["prediction"],
+        report.prediction.predicted_class if report is not None else None,
         execution_time_ms,
         len(validation.passed),
         len(validation.failed),
@@ -89,10 +81,9 @@ def _build_scenario_output(
     execution_time_ms: float,
 ) -> dict[str, Any]:
     """Build the unified scenario output document."""
-    response = result.get("response")
+    report = result.get("report")
     trace_entries = result.get("trace", [])
     errors = result.get("errors", [])
-    interpreted = result.get("interpreted_explanation")
 
     # Input summary
     t = scenario.request.tabular
@@ -122,204 +113,40 @@ def _build_scenario_output(
         "n_images": len(scenario.request.images),
     }
 
-    # Orchestrator output
-    orchestrator_output = {
-        "session_id": result.get("session_id", ""),
-        "timestamp": result.get("timestamp", ""),
-    }
-
-    # Inference output
-    prediction = result.get("prediction")
-    inference_output: dict[str, Any] = {"prediction": None, "explanation_summary": None}
-    if prediction is not None:
-        inference_output["prediction"] = {
-            "prediction": prediction.prediction,
-            "prediction_label": prediction.prediction_label,
-            "confidence": round(prediction.confidence, 4),
-            "probabilities": {
-                str(k): round(v, 4) for k, v in prediction.probabilities.items()
-            },
+    def _node_summary(node_name: str) -> dict[str, Any]:
+        node_traces = [e for e in trace_entries if e.node == node_name]
+        if not node_traces:
+            return {"executed": False}
+        entry = node_traces[0]
+        summary: dict[str, Any] = {
+            "executed": True,
+            "status": entry.status,
+            "timing_ms": round(entry.duration_ms, 2),
         }
-
-    if interpreted is not None:
-        inference_output["explanation_summary"] = {
-            "modality_contributions": {
-                k: round(v, 4) for k, v in interpreted.modality_contributions.items()
-            },
-            "top_factors": [
-                {
-                    "name": f.name,
-                    "description": f.description,
-                    "modality": f.modality,
-                    "direction": f.direction,
-                    "shap_magnitude": round(f.shap_magnitude, 4),
-                    "group": f.group,
-                }
-                for f in interpreted.top_factors
-            ],
-            "aggregated_embeddings": {
-                k: {
-                    "n_dimensions": v.get("n_dimensions", 0),
-                    "total_magnitude": round(v.get("total_magnitude", 0), 4),
-                    "description": v.get("description", ""),
-                }
-                for k, v in interpreted.aggregated_embeddings.items()
-            },
-        }
-
-    # Inference timing from trace
-    inf_traces = [e for e in trace_entries if e.node == "inference"]
-    if inf_traces:
-        inference_output["timing_ms"] = inf_traces[0].duration_ms
-        inference_output["feature_count"] = inf_traces[0].metadata.get("n_features")
-
-    # Explainer output
-    explainer_output: dict[str, Any] = {
-        "narrative_explanation": "",
-        "used_fallback": False,
-    }
-    if response is not None:
-        explainer_output["narrative_explanation"] = response.narrative_explanation
-
-    expl_traces = [e for e in trace_entries if e.node == "explainer"]
-    if expl_traces:
-        explainer_output["timing_ms"] = expl_traces[0].duration_ms
-        explainer_output["status"] = expl_traces[0].status
-        explainer_output["used_fallback"] = expl_traces[0].metadata.get("used_fallback", False)
-        llm_usage = expl_traces[0].metadata.get("llm_usage")
+        llm_usage = entry.metadata.get("llm_usage")
         if llm_usage:
-            explainer_output["llm_usage"] = llm_usage
+            summary["llm_usage"] = llm_usage
+        return summary
 
-    # Recommender output
-    recommender_output: dict[str, Any] = {
-        "recommendations": [],
-        "used_fallback": False,
+    agents_output = {
+        "orchestrator": {
+            "session_id": result.get("session_id", ""),
+            "timestamp": result.get("timestamp", ""),
+            **_node_summary("orchestrator"),
+        },
+        "inference": _node_summary("inference"),
+        "data_analyst": _node_summary("data_analyst"),
+        "visual_analyst": _node_summary("visual_analyst"),
+        "recommendation_agent": _node_summary("recommendation_agent"),
+        "synthesizer": _node_summary("synthesizer"),
+        "aggregator": _node_summary("aggregator"),
     }
-    if response is not None:
-        recommender_output["recommendations"] = [
-            {
-                "feature": r.feature,
-                "current_value": r.current_value,
-                "suggested_value": r.suggested_value,
-                "expected_impact": r.expected_impact,
-                "priority": r.priority,
-                "category": r.category,
-                "actionable": r.actionable,
-            }
-            for r in response.recommendations
-        ]
 
-    rec_traces = [e for e in trace_entries if e.node == "recommender"]
-    if rec_traces:
-        recommender_output["timing_ms"] = rec_traces[0].duration_ms
-        recommender_output["status"] = rec_traces[0].status
-        recommender_output["used_fallback"] = rec_traces[0].metadata.get("used_fallback", False)
-        llm_usage = rec_traces[0].metadata.get("llm_usage")
-        if llm_usage:
-            recommender_output["llm_usage"] = llm_usage
-
-    # Description writer output
-    description_writer_output: dict[str, Any] = {
-        "improved_description": None,
-        "executed": False,
-        "skipped": False,
-    }
-    dw_traces = [e for e in trace_entries if e.node == "description_writer"]
-    if dw_traces:
-        dw_trace = dw_traces[0]
-        description_writer_output["executed"] = dw_trace.status != "skipped"
-        description_writer_output["skipped"] = dw_trace.status == "skipped"
-        description_writer_output["timing_ms"] = dw_trace.duration_ms
-        description_writer_output["status"] = dw_trace.status
-
-        if response is not None and response.improved_description:
-            description_writer_output["improved_description"] = response.improved_description
-
-        llm_usage = dw_trace.metadata.get("llm_usage")
-        if llm_usage:
-            description_writer_output["llm_usage"] = llm_usage
-
-    # Aggregator output
-    aggregator_output: dict[str, Any] = {}
-    agg_traces = [e for e in trace_entries if e.node == "aggregator"]
-    if agg_traces:
-        aggregator_output["timing_ms"] = agg_traces[0].duration_ms
-        aggregator_output["status"] = agg_traces[0].status
-        aggregator_output["has_narrative"] = agg_traces[0].metadata.get("has_narrative", False)
-        aggregator_output["n_recommendations"] = agg_traces[0].metadata.get("n_recommendations", 0)
-        aggregator_output["has_improved_description"] = agg_traces[0].metadata.get(
-            "has_improved_description", False
-        )
-
-    # Final response (the full AgentResponse as JSON)
+    # Final response: the full AdoptionReport, JSON-serialized
     final_response: dict[str, Any] | None = None
-    if response is not None:
-        final_response = {
-            "prediction": response.prediction,
-            "prediction_label": response.prediction_label,
-            "probabilities": {str(k): round(v, 4) for k, v in response.probabilities.items()},
-            "confidence": round(response.confidence, 4),
-            "narrative_explanation": response.narrative_explanation,
-            "modality_contributions": {
-                k: round(v, 4) for k, v in response.modality_contributions.items()
-            },
-            "top_positive_factors": [
-                {
-                    "feature": f.feature,
-                    "display_name": f.display_name,
-                    "value": f.value,
-                    "shap_value": round(f.shap_value, 4),
-                    "modality": f.modality,
-                    "direction": f.direction,
-                }
-                for f in response.top_positive_factors
-            ],
-            "top_negative_factors": [
-                {
-                    "feature": f.feature,
-                    "display_name": f.display_name,
-                    "value": f.value,
-                    "shap_value": round(f.shap_value, 4),
-                    "modality": f.modality,
-                    "direction": f.direction,
-                }
-                for f in response.top_negative_factors
-            ],
-            "recommendations": [
-                {
-                    "feature": r.feature,
-                    "current_value": r.current_value,
-                    "suggested_value": r.suggested_value,
-                    "expected_impact": r.expected_impact,
-                    "priority": r.priority,
-                    "category": r.category,
-                    "actionable": r.actionable,
-                }
-                for r in response.recommendations
-            ],
-            "improved_description": response.improved_description,
-            "modality_available": getattr(response, "modality_available", {}),
-            "metadata": {
-                "session_id": response.metadata.session_id,
-                "model_version": response.metadata.model_version,
-                "model_type": response.metadata.model_type,
-                "inference_time_ms": round(response.metadata.inference_time_ms, 2),
-                "total_time_ms": round(response.metadata.total_time_ms, 2),
-                "timestamp": response.metadata.timestamp,
-                "nodes_executed": response.metadata.nodes_executed,
-                "errors": [
-                    {
-                        "node": e.node,
-                        "error_type": e.error_type,
-                        "message": e.message,
-                        "recoverable": e.recoverable,
-                    }
-                    for e in response.metadata.errors
-                ],
-            },
-        }
+    if report is not None:
+        final_response = report.model_dump(mode="json")
 
-    # Error summary
     error_summary = [
         {
             "node": e.node,
@@ -330,25 +157,17 @@ def _build_scenario_output(
         for e in errors
     ]
 
-    # Trace summary
-    trace_summary = extract_trace_summary(result)
+    audit = build_audit_record(result)
 
     return {
         "scenario": scenario.name,
         "scenario_description": scenario.description,
         "tags": scenario.tags,
         "input": input_summary,
-        "agents": {
-            "orchestrator": orchestrator_output,
-            "inference": inference_output,
-            "explainer": explainer_output,
-            "recommender": recommender_output,
-            "description_writer": description_writer_output,
-            "aggregator": aggregator_output,
-        },
+        "agents": agents_output,
         "final_response": final_response,
         "errors": error_summary,
-        "trace": trace_summary,
+        "audit": audit,
         "execution_metadata": {
             "execution_time_ms": round(execution_time_ms, 2),
             "recorded_at": datetime.now(timezone.utc).isoformat(),
@@ -384,33 +203,13 @@ def save_scenario_output(output: dict[str, Any], output_dir: Path | None = None)
     return filepath
 
 
-def run_all_scenarios(
-    output_dir: Path | None = None,
-    scenarios: list[TestScenario] | None = None,
+async def _run_all_scenarios_async(
+    out_dir: Path,
+    scenarios: list[TestScenario],
 ) -> dict[str, Any]:
-    """Execute all scenarios and produce a summary report.
-
-    Parameters
-    ----------
-    output_dir : Path | None
-        Output directory. Defaults to ``tests/e2e_tests/outputs/``.
-    scenarios : list[TestScenario] | None
-        Scenarios to run. Defaults to all built-in scenarios.
-
-    Returns
-    -------
-    dict
-        Summary report with per-scenario results and aggregate metrics.
-    """
-    out_dir = output_dir or _OUTPUT_DIR
-    scenarios = scenarios or build_all_scenarios()
-
-    # Compile graph once for all scenarios
-    logger.info("Compiling full agent graph...")
-    app = compile_full_graph()
+    logger.info("Compiling Evidence Board graph...")
+    app = compile_report_graph()
     logger.info("Graph compiled successfully")
-
-    metric_store = MetricStore()
 
     results: list[dict[str, Any]] = []
     total_passed = 0
@@ -426,7 +225,7 @@ def run_all_scenarios(
         )
 
         try:
-            output = run_scenario(scenario, app, metric_store)
+            output = await run_scenario(scenario, app)
             save_scenario_output(output, out_dir)
 
             v = output.get("validation", {})
@@ -437,6 +236,7 @@ def run_all_scenarios(
             total_failed += failed
             total_warnings += warns
 
+            report = output.get("final_response")
             results.append({
                 "scenario": scenario.name,
                 "status": "PASS" if failed == 0 else "FAIL",
@@ -444,9 +244,7 @@ def run_all_scenarios(
                 "checks_failed": failed,
                 "warnings": warns,
                 "execution_time_ms": output["execution_metadata"]["execution_time_ms"],
-                "prediction": output["agents"]["inference"]["prediction"]["prediction"]
-                if output["agents"]["inference"]["prediction"]
-                else None,
+                "prediction": report["prediction"]["predicted_class"] if report else None,
             })
 
         except Exception as exc:
@@ -460,9 +258,6 @@ def run_all_scenarios(
 
     total_time_ms = (time.perf_counter() - t0_all) * 1000
 
-    # Aggregate metrics
-    metrics_summary = metric_store.get_summary()
-
     # Build summary report
     summary = {
         "run_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -474,7 +269,6 @@ def run_all_scenarios(
         "total_warnings": total_warnings,
         "total_execution_time_ms": round(total_time_ms, 2),
         "per_scenario_results": results,
-        "aggregate_metrics": metrics_summary,
     }
 
     # Save summary report
@@ -484,3 +278,31 @@ def run_all_scenarios(
     logger.info("Summary report saved: %s", summary_path)
 
     return summary
+
+
+def run_all_scenarios(
+    output_dir: Path | None = None,
+    scenarios: list[TestScenario] | None = None,
+) -> dict[str, Any]:
+    """Execute all scenarios and produce a summary report.
+
+    Requires a real LLM API key: every scenario invokes the full
+    Evidence Board graph, whose ``data_analyst``, ``visual_analyst``,
+    ``recommendation_agent``, and ``synthesizer`` nodes call out to an
+    LLM.
+
+    Parameters
+    ----------
+    output_dir : Path | None
+        Output directory. Defaults to ``tests/e2e_tests/outputs/``.
+    scenarios : list[TestScenario] | None
+        Scenarios to run. Defaults to all built-in scenarios.
+
+    Returns
+    -------
+    dict
+        Summary report with per-scenario results.
+    """
+    out_dir = output_dir or _OUTPUT_DIR
+    scenarios = scenarios or build_all_scenarios()
+    return asyncio.run(_run_all_scenarios_async(out_dir, scenarios))

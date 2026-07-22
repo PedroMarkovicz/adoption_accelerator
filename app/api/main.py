@@ -3,7 +3,7 @@ FastAPI application factory for the Adoption Accelerator API.
 
 Startup (lifespan):
   - Loads and warms the InferencePipeline singleton via get_inference_pipeline().
-  - Compiles both the deterministic and full LangGraph agent graphs.
+  - Compiles the Evidence Board LangGraph agent graph (compile_report_graph).
   - Starts the job store TTL cleanup background thread.
   - All are stored in app.state for use by routers.
 
@@ -23,7 +23,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from agents.graph import compile_deterministic_graph, compile_full_graph
+from adoption_accelerator.agents.graph import compile_report_graph
 from adoption_accelerator.inference.serving import get_inference_pipeline
 from app.api.middleware.error_handler import register_error_handlers
 from app.api.routers import explore, health, predict, predictions
@@ -110,11 +110,8 @@ async def lifespan(app: FastAPI):
     logger.info("Startup: loading InferencePipeline ...")
     app.state.pipeline = get_inference_pipeline()
 
-    logger.info("Startup: compiling deterministic graph ...")
-    app.state.deterministic_graph = compile_deterministic_graph()
-
-    logger.info("Startup: compiling full agent graph ...")
-    app.state.graph = compile_full_graph()
+    logger.info("Startup: compiling Evidence Board agent graph ...")
+    app.state.graph = compile_report_graph()
 
     logger.info("Startup: starting job store cleanup thread ...")
     job_store.start_cleanup_loop()
@@ -149,7 +146,6 @@ async def lifespan(app: FastAPI):
         job_store.stop_cleanup_loop()
         logger.info("Shutdown: releasing resources.")
         app.state.pipeline = None
-        app.state.deterministic_graph = None
         app.state.graph = None
         app.state.distributions = None
         app.state.adoption_patterns = None

@@ -54,35 +54,34 @@ def get_recent_predictions(
         if len(entries) >= limit:
             continue
 
-        # Extract prediction details from phase1_result
-        phase1 = job.phase1_result or {}
-        metadata = job.metadata or {}
+        # Extract prediction details from the stored AdoptionReport dict
+        # (job.phase1_result holds report.model_dump(mode="json")).
+        report = job.phase1_result or {}
+        pred = report.get("prediction", {}) or {}
+        report_metadata = report.get("metadata", {}) or {}
 
-        prediction = phase1.get("prediction", -1)
-        prediction_label = phase1.get("prediction_label", "N/A")
-        confidence = phase1.get("confidence", 0.0)
+        prediction = pred.get("predicted_class", -1)
+        prediction_label = pred.get("prediction_label", "N/A")
+        confidence = pred.get("class_confidence", 0.0)
 
-        # Try to determine pet type from the stored data
+        # pet_type is not part of AdoptionReport; not available from the
+        # stored report.
         pet_type = "N/A"
-        # The modality_available can hint at data, but pet_type is not stored
-        # in job store directly. We store it in metadata if available.
-        pet_type = metadata.get("pet_type", "N/A")
 
-        # Timestamp from metadata or created_at
-        timestamp_str = metadata.get(
+        # Timestamp from report metadata or created_at
+        timestamp_str = report_metadata.get(
             "timestamp",
             datetime.fromtimestamp(job.created_at, tz=timezone.utc).isoformat(),
         )
 
-        response_time_ms = metadata.get("total_time_ms", 0.0)
+        timing_ms = report_metadata.get("timing_ms", {}) or {}
+        response_time_ms = sum(timing_ms.values()) if timing_ms else 0.0
 
         # Map status
         if job.status == "error":
             display_status = "Error"
         elif job.status == "complete":
             display_status = "Success"
-        elif job.status == "phase1_ready":
-            display_status = "Partial"
         else:
             display_status = "Pending"
 

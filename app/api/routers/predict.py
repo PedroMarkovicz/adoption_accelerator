@@ -1,8 +1,9 @@
 """
-Prediction router -- async two-phase architecture.
+Prediction router -- single-graph background architecture.
 
-POST /predict              -- Run Phase 1 sync, spawn Phase 2 background, return 202.
-GET  /predict/{id}/status  -- Poll job status and retrieve results.
+POST /predict              -- Create a job, run the Evidence Board graph in
+                               a background thread, return 202 immediately.
+GET  /predict/{id}/status  -- Poll job status and retrieve the AdoptionReport.
 
 The POST endpoint accepts **two content types**:
   - ``application/json``: JSON body parsed as PetProfileRequest (no images).
@@ -15,15 +16,18 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.datastructures import UploadFile
 from fastapi.responses import JSONResponse
 
+from adoption_accelerator.agents.contracts import AdoptionReport
+
 from app.api.schemas.requests import PetProfileRequest
-from app.api.schemas.responses import PredictionStatusResponse
+from app.api.schemas.responses import ReportStatusResponse
 from app.api.services.job_store import job_store
-from app.api.services.prediction_service import run_phase1, spawn_phase2
+from app.api.services.prediction_service import run_report_background, translate_request
 
 logger = logging.getLogger(__name__)
 
@@ -88,73 +92,56 @@ async def _parse_request(
 
 @router.post("/predict", status_code=202)
 async def predict(request: Request) -> JSONResponse:
-    """Run Phase 1 synchronously and spawn Phase 2 in a background thread.
+    """Create a prediction job and run the Evidence Board graph in the
+    background.
 
-    Returns 202 Accepted with the Phase 1 results immediately available.
-    The client should poll GET /predict/{session_id}/status for Phase 2.
+    Returns 202 Accepted with the session_id and a "running" status. The
+    client should poll GET /predict/{session_id}/status for the report.
 
     Accepts both ``application/json`` and ``multipart/form-data``.
     """
     pet, image_paths, temp_dir = await _parse_request(request)
 
-    deterministic_graph = getattr(request.app.state, "deterministic_graph", None)
-    full_graph = getattr(request.app.state, "graph", None)
-
-    if deterministic_graph is None:
+    graph_app = getattr(request.app.state, "graph", None)
+    if graph_app is None:
         raise HTTPException(
             status_code=503,
-            detail="Deterministic graph is not available. Server may still be starting up.",
+            detail="Agent graph is not available. Server may still be starting up.",
         )
 
-    if full_graph is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Full agent graph is not available. Server may still be starting up.",
-        )
+    session_id = str(uuid.uuid4())
 
     try:
-        phase1_response = run_phase1(
-            pet, deterministic_graph, image_paths=image_paths
-        )
-        session_id = phase1_response.session_id
+        prediction_request = translate_request(pet, image_paths=image_paths)
+        job_store.create(session_id)
 
-        # Spawn Phase 2 in a background thread (owns temp_dir cleanup)
-        spawn_phase2(
+        run_report_background(
             session_id,
-            pet,
-            full_graph,
-            image_paths=image_paths,
+            prediction_request,
+            graph_app,
             temp_dir=temp_dir,
         )
 
-        logger.info(
-            "Phase 1 ready for session %s, Phase 2 spawned in background",
-            session_id,
-        )
+        logger.info("Report generation started for session %s", session_id)
 
-        return JSONResponse(
-            status_code=202,
-            content=phase1_response.model_dump(),
-        )
+        response = ReportStatusResponse(session_id=session_id, status="running")
+        return JSONResponse(status_code=202, content=response.model_dump())
 
-    except ValueError as exc:
-        logger.error("Phase 1 failed (bad response from graph): %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("Unexpected error during Phase 1 prediction")
+        logger.exception("Unexpected error while starting prediction")
         raise HTTPException(
             status_code=500, detail=f"Pipeline error: {exc}"
         ) from exc
 
 
-@router.get("/predict/{session_id}/status", response_model=PredictionStatusResponse)
-def get_prediction_status(session_id: str) -> PredictionStatusResponse:
+@router.get("/predict/{session_id}/status", response_model=ReportStatusResponse)
+def get_prediction_status(session_id: str) -> ReportStatusResponse:
     """Poll the current status of a prediction job.
 
     Returns the job state from the in-memory store:
-    - ``phase1_ready``: Phase 1 results available, Phase 2 still running.
-    - ``complete``: Both Phase 1 and Phase 2 results available.
-    - ``error``: An error occurred during processing.
+    - ``running``: the graph is still executing.
+    - ``done``: the AdoptionReport is available.
+    - ``error``: an error occurred during processing.
     """
     job = job_store.get(session_id)
     if job is None:
@@ -164,32 +151,23 @@ def get_prediction_status(session_id: str) -> PredictionStatusResponse:
         )
 
     if job.status == "error":
-        return PredictionStatusResponse(
+        return ReportStatusResponse(
             session_id=session_id,
             status="error",
-            phase1=job.phase1_result,
-            error_message=job.error,
-        )
-
-    if job.status == "phase1_ready":
-        return PredictionStatusResponse(
-            session_id=session_id,
-            status="phase1_ready",
-            phase1=job.phase1_result,
-            metadata=job.metadata,
+            error=job.error,
         )
 
     if job.status == "complete":
-        return PredictionStatusResponse(
+        report = (
+            AdoptionReport.model_validate(job.phase1_result)
+            if job.phase1_result is not None
+            else None
+        )
+        return ReportStatusResponse(
             session_id=session_id,
-            status="complete",
-            phase1=job.phase1_result,
-            phase2=job.phase2_result,
-            metadata=job.metadata,
+            status="done",
+            report=report,
         )
 
-    # Fallback: pending
-    return PredictionStatusResponse(
-        session_id=session_id,
-        status="pending",
-    )
+    # pending / phase1_ready (legacy) -- still running
+    return ReportStatusResponse(session_id=session_id, status="running")

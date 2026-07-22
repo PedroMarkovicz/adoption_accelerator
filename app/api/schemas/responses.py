@@ -2,14 +2,11 @@
 Response schemas for the Adoption Accelerator API.
 
 These Pydantic models define the exact contract between the FastAPI
-server and any frontend client.  They are derived from the e2e test
-output JSONs and the AgentResponse defined in agents/state.py.
+server and any frontend client.
 
-Mapping reference (agents/state.py -> API):
-  AgentResponse.probabilities (dict[int, float])  -> dict[str, float]
-  FeatureFactor                                   -> FeatureFactorOut
-  Recommendation                                  -> RecommendationOut
-  ResponseMetadata                                -> ResponseMetadataOut
+The prediction flow is served by ``ReportStatusResponse``, a thin wrapper
+around the agent graph's ``AdoptionReport`` (see
+``adoption_accelerator.agents.contracts``).
 """
 
 from __future__ import annotations
@@ -18,73 +15,16 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-
-class FeatureFactorOut(BaseModel):
-    """A single feature's SHAP contribution, frontend-ready."""
-
-    feature: str
-    display_name: str
-    value: str
-    shap_value: float
-    modality: Literal["tabular", "text", "image", "metadata"]
-    direction: Literal["positive", "negative"]
+from adoption_accelerator.agents.contracts import AdoptionReport
 
 
-class RecommendationOut(BaseModel):
-    """A single actionable recommendation."""
-
-    feature: str
-    current_value: str
-    suggested_value: str
-    expected_impact: str
-    priority: int
-    category: Literal["photo", "description", "health", "listing_details"]
-    actionable: bool
-
-
-class ResponseMetadataOut(BaseModel):
-    """Execution metadata for the prediction response."""
+class ReportStatusResponse(BaseModel):
+    """Status/result wrapper returned by POST /predict and its status poll."""
 
     session_id: str
-    model_version: str
-    model_type: str
-    inference_time_ms: float
-    total_time_ms: float
-    timestamp: str
-    nodes_executed: list[str]
-    errors: list[dict]
-
-
-class Phase1Response(BaseModel):
-    """Deterministic ML results — available immediately after inference."""
-
-    prediction: int
-    prediction_label: str
-    probabilities: dict[str, float]
-    confidence: float
-    modality_contributions: dict[str, float]
-    modality_available: dict[str, bool]
-    top_positive_factors: list[FeatureFactorOut]
-    top_negative_factors: list[FeatureFactorOut]
-
-
-class Phase2Response(BaseModel):
-    """LLM-generated results — narrative, recommendations, improved description."""
-
-    narrative_explanation: Optional[str] = None
-    recommendations: list[RecommendationOut] = []
-    improved_description: Optional[str] = None
-
-
-class PredictionStatusResponse(BaseModel):
-    """Full prediction response returned by POST /predict."""
-
-    session_id: str
-    status: Literal["pending", "phase1_ready", "complete", "error"]
-    phase1: Optional[Phase1Response] = None
-    phase2: Optional[Phase2Response] = None
-    metadata: Optional[ResponseMetadataOut] = None
-    error_message: Optional[str] = None
+    status: str  # queued / running / done / error
+    report: Optional[AdoptionReport] = None
+    error: Optional[str] = None
 
 
 class HealthResponse(BaseModel):
