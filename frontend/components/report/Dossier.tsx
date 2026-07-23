@@ -6,6 +6,7 @@ import { VerdictHero } from "./VerdictHero";
 import { Recommendations } from "./Recommendations";
 import { RewrittenCopy } from "./RewrittenCopy";
 import { PhotoFeedback } from "./PhotoFeedback";
+import { PeelBack } from "./PeelBack";
 
 export function Dossier({ report }: { report: AdoptionReport }) {
   const { data: meta } = useMeta();
@@ -26,6 +27,7 @@ export function Dossier({ report }: { report: AdoptionReport }) {
             recommendations are not shown. Set OPENAI_API_KEY on the backend to enable them.
           </p>
         )}
+        <PeelBack report={report} classes={classes} />
       </div>
     </main>
   );
