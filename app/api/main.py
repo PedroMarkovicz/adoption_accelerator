@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from adoption_accelerator.agents.graph import compile_report_graph
 from adoption_accelerator.inference.serving import get_inference_pipeline
 from app.api.middleware.error_handler import register_error_handlers
-from app.api.routers import explore, health, predict, predictions
+from app.api.routers import explore, health, meta, predict, predictions
 from app.api.services.job_store import job_store
 
 logger = logging.getLogger(__name__)
@@ -179,6 +179,7 @@ def create_app() -> FastAPI:
     application.include_router(predict.router)
     application.include_router(explore.router)
     application.include_router(predictions.router)
+    application.include_router(meta.router)
 
     return application
 
