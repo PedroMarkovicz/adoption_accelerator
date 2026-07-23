@@ -29,11 +29,11 @@ export const fullReport = {
   narrative: "This pet is likely to be adopted within a week.",
   optimized_description: "Meet a friendly, healthy companion ready for a loving home.",
   headline: "Likely adopted within a week",
-  metadata: { session_id: "abc", ml_model_version: "tuned_v1", timing_ms: { total: 4200 }, cost_usd: 0.004 },
+  metadata: { session_id: "abc", ml_model_version: "tuned_v1", timing_ms: { total: 4200 }, estimated_cost_usd: 0.004 },
 } as unknown as AdoptionReport;
 
 export const degradedReport = {
   prediction: fullReport.prediction,
   visual: null, recommendations: null, narrative: "", optimized_description: null, headline: "Prediction ready",
-  metadata: { session_id: "def", ml_model_version: "tuned_v1", timing_ms: {}, cost_usd: 0 },
+  metadata: { session_id: "def", ml_model_version: "tuned_v1", timing_ms: {}, estimated_cost_usd: 0 },
 } as unknown as AdoptionReport;

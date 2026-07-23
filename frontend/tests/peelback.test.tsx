@@ -17,4 +17,11 @@ describe("PeelBack", () => {
     await userEvent.click(screen.getByRole("button", { name: /see how the AI decided/i }));
     expect(await screen.findByText(/Photo appeal/)).toBeInTheDocument();
   });
+
+  it("shows the estimated cost in the agent trace tab", async () => {
+    render(<PeelBack report={fullReport} classes={classes} />);
+    await userEvent.click(screen.getByRole("button", { name: /see how the AI decided/i }));
+    await userEvent.click(screen.getByText("Agent trace"));
+    expect(await screen.findByText("$0.0040")).toBeInTheDocument();
+  });
 });
