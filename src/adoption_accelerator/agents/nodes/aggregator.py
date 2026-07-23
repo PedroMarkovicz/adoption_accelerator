@@ -57,6 +57,9 @@ def aggregator_node(state: AgentState) -> dict:
         t.node: t.metadata["model"] for t in trace if "model" in t.metadata
     }
 
+    request = state.get("request")
+    image_count = len(getattr(request, "images", None) or [])
+
     report = AdoptionReport(
         prediction=prediction_evidence,
         visual=state.get("visual_evidence"),
@@ -70,6 +73,7 @@ def aggregator_node(state: AgentState) -> dict:
             llm_models=llm_models,
             timing_ms=timing,
             estimated_cost_usd=estimate_cost_usd(trace),
+            image_count=image_count,
             errors=list(state.get("errors", [])),
             timestamp=state.get("timestamp", ""),
         ),
