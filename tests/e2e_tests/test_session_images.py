@@ -89,3 +89,32 @@ def test_multipart_without_profile_returns_422_and_leaves_no_session_dir(tmp_pat
     assert resp.status_code == 422
     after = set(p.name for p in session_storage.SESSIONS_DIR.iterdir()) if session_storage.SESSIONS_DIR.is_dir() else set()
     assert after == before
+
+
+def test_image_endpoint_serves_saved_file():
+    sid = _sid()
+    session_storage.save_image(sid, 0, "a.png", b"png-bytes")
+    try:
+        with TestClient(app) as client:
+            resp = client.get(f"/predict/{sid}/images/0")
+        assert resp.status_code == 200
+        assert resp.content == b"png-bytes"
+    finally:
+        session_storage.delete_session(sid)
+
+
+def test_image_endpoint_404_for_unknown_index():
+    sid = _sid()
+    session_storage.save_image(sid, 0, "a.png", b"x")
+    try:
+        with TestClient(app) as client:
+            resp = client.get(f"/predict/{sid}/images/7")
+        assert resp.status_code == 404
+    finally:
+        session_storage.delete_session(sid)
+
+
+def test_image_endpoint_404_for_non_uuid_session():
+    with TestClient(app) as client:
+        resp = client.get("/predict/not-a-uuid/images/0")
+    assert resp.status_code == 404

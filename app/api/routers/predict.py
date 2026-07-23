@@ -18,7 +18,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.datastructures import UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from adoption_accelerator.agents.contracts import AdoptionReport
 
@@ -163,3 +163,16 @@ def get_prediction_status(session_id: str) -> ReportStatusResponse:
 
     # pending / phase1_ready (legacy) -- still running
     return ReportStatusResponse(session_id=session_id, status="running")
+
+
+@router.get("/predict/{session_id}/images/{index}")
+def get_prediction_image(session_id: str, index: int) -> FileResponse:
+    """Serve one uploaded image for a session, addressed by upload index.
+
+    The path is resolved inside the session's directory from the integer
+    index alone, so no user-controlled path segment is ever joined.
+    """
+    path = session_storage.find_image(session_id, index)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Image not found.")
+    return FileResponse(path)
