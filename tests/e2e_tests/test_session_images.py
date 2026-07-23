@@ -2,6 +2,9 @@
 
 import uuid
 
+from fastapi.testclient import TestClient
+
+from app.api.main import app
 from app.api.services import session_storage
 
 
@@ -70,3 +73,19 @@ def test_prune_all_removes_every_session_directory():
     assert removed >= 2
     assert not (session_storage.SESSIONS_DIR / sid_a).exists()
     assert not (session_storage.SESSIONS_DIR / sid_b).exists()
+
+
+def test_save_image_rejects_non_uuid_session_id():
+    import pytest
+    with pytest.raises(ValueError):
+        session_storage.save_image("../etc", 0, "a.jpg", b"x")
+    assert not (session_storage.SESSIONS_DIR / "../etc").exists()
+
+
+def test_multipart_without_profile_returns_422_and_leaves_no_session_dir(tmp_path):
+    before = set(p.name for p in session_storage.SESSIONS_DIR.iterdir()) if session_storage.SESSIONS_DIR.is_dir() else set()
+    with TestClient(app) as client:
+        resp = client.post("/predict", files={"images": ("a.jpg", b"x", "image/jpeg")})
+    assert resp.status_code == 422
+    after = set(p.name for p in session_storage.SESSIONS_DIR.iterdir()) if session_storage.SESSIONS_DIR.is_dir() else set()
+    assert after == before

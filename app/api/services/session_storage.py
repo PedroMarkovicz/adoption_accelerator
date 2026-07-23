@@ -45,6 +45,8 @@ def save_image(session_id: str, index: int, filename: str, content: bytes) -> Pa
     The user's filename is used only to derive a suffix; it never becomes part
     of the stored path.
     """
+    if not is_valid_session_id(session_id):
+        raise ValueError(f"invalid session id: {session_id!r}")
     ext = Path(filename or "").suffix.lower()
     if ext == ".jpeg":
         ext = ".jpg"

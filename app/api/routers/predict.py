@@ -101,7 +101,11 @@ async def predict(request: Request) -> JSONResponse:
         )
 
     session_id = str(uuid.uuid4())
-    pet, image_paths = await _parse_request(request, session_id)
+    try:
+        pet, image_paths = await _parse_request(request, session_id)
+    except Exception:
+        session_storage.delete_session(session_id)
+        raise
 
     try:
         prediction_request = translate_request(pet, image_paths=image_paths)
