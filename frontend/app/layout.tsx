@@ -4,6 +4,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { MotionConfig } from "framer-motion";
 import { QueryProvider } from "@/lib/query";
+import { SiteHeader } from "@/components/nav/SiteHeader";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -22,7 +23,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${fraunces.variable} ${GeistSans.variable} ${GeistMono.variable}`}>
       <body>
         <MotionConfig reducedMotion="user">
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <SiteHeader />
+            {children}
+          </QueryProvider>
         </MotionConfig>
       </body>
     </html>
