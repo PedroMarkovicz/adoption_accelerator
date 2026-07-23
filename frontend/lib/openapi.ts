@@ -95,6 +95,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/predict/{session_id}/images/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Prediction Image
+         * @description Serve one uploaded image for a session, addressed by upload index.
+         *
+         *     The path is resolved inside the session's directory from the integer
+         *     index alone, so no user-controlled path segment is ever joined.
+         */
+        get: operations["get_prediction_image_predict__session_id__images__index__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/explore/distributions": {
         parameters: {
             query?: never;
@@ -640,6 +663,11 @@ export interface components {
              * @default 0
              */
             estimated_cost_usd: number;
+            /**
+             * Image Count
+             * @default 0
+             */
+            image_count: number;
             /** Errors */
             errors?: components["schemas"]["NodeError"][];
             /**
@@ -824,6 +852,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_prediction_image_predict__session_id__images__index__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
