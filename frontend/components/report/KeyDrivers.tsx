@@ -7,10 +7,10 @@ export function KeyDrivers({ prediction }: { prediction: PredictionEvidence }) {
   return (
     <ul className="flex flex-col gap-3">
       {drivers.map((d, i) => (
-        <li key={i} className="grid grid-cols-[1fr_auto] items-center gap-3">
-          <div>
-            <p className="text-sm font-medium">{d.display_name || d.feature}</p>
-            {d.reading && <p className="text-xs text-muted">{d.reading}</p>}
+        <li key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="min-w-0">
+            <p className="break-words text-sm font-medium">{d.display_name || d.feature}</p>
+            {d.reading && <p className="break-words text-xs text-muted">{d.reading}</p>}
           </div>
           <div className="flex items-center gap-2">
             <div className="h-2 w-32 rounded-full bg-ink/10">
