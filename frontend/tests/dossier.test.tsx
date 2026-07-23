@@ -44,4 +44,15 @@ describe("Dossier surface", () => {
       "src", "/api/predict/s1/images/0",
     );
   });
+
+  it("does not render a lead photo when the model's best index is out of range", () => {
+    const outOfRange = {
+      ...fullReport,
+      metadata: { ...fullReport.metadata, session_id: "s1", image_count: 2 },
+      visual: { ...fullReport.visual, best_photo_index: 2 },
+    } as typeof fullReport;
+    const { container } = render(<Dossier report={outOfRange} />);
+    const header = container.querySelector("header");
+    expect(within(header!).queryByRole("img")).toBeNull();
+  });
 });
