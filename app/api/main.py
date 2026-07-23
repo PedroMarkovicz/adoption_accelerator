@@ -20,6 +20,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,6 +34,11 @@ logger = logging.getLogger(__name__)
 
 # Artifact paths
 _ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Load the repo-root .env so a locally-configured OPENAI_API_KEY (and other
+# secrets) reach the agent graph. Existing environment variables win.
+load_dotenv(_ROOT / ".env")
+
 _EXPLORE_DIR = _ROOT / "artifacts" / "explore"
 _REPORTS_DIR = _ROOT / "reports"
 _MODEL_DIR = _ROOT / "artifacts" / "models" / "tuned_v1"
