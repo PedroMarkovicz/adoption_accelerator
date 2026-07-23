@@ -28,6 +28,7 @@ from adoption_accelerator.agents.graph import compile_report_graph
 from adoption_accelerator.inference.serving import get_inference_pipeline
 from app.api.middleware.error_handler import register_error_handlers
 from app.api.routers import explore, health, meta, predict, predictions
+from app.api.services import session_storage
 from app.api.services.job_store import job_store
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,13 @@ async def lifespan(app: FastAPI):
     logger.info("Startup: compiling Evidence Board agent graph ...")
     app.state.graph = compile_report_graph()
 
+    logger.info("Startup: pruning orphaned session directories ...")
+    pruned = session_storage.prune_all()
+    if pruned:
+        logger.info("Removed %d orphaned session directories.", pruned)
+
     logger.info("Startup: starting job store cleanup thread ...")
+    job_store.on_expire = session_storage.delete_session
     job_store.start_cleanup_loop()
 
     # Load precomputed explore data (coerce None -> safe defaults so

@@ -7,13 +7,14 @@ and automatic TTL-based cleanup of stale entries.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 # TTL for job entries (seconds)
-JOB_TTL_SECONDS = 600  # 10 minutes
+JOB_TTL_SECONDS = 21600  # 6 hours
 CLEANUP_INTERVAL_SECONDS = 60  # Run cleanup every 60 seconds
 
 
@@ -40,6 +41,7 @@ class JobStore:
         self._lock = threading.Lock()
         self._jobs: dict[str, JobRecord] = {}
         self._cleanup_running = False
+        self.on_expire: Callable[[str], None] | None = None
 
     # -- Public API --------------------------------------------------------
 
@@ -137,8 +139,13 @@ class JobStore:
                 for sid, job in self._jobs.items()
             ]
 
-    def cleanup_expired(self) -> int:
-        """Remove entries older than JOB_TTL_SECONDS. Returns count removed."""
+    def cleanup_expired(self) -> list[str]:
+        """Remove entries older than JOB_TTL_SECONDS.
+
+        Returns the expired session ids. The ``on_expire`` hook (when set) is
+        invoked once per expired session OUTSIDE the lock, so a slow or failing
+        hook cannot block other callers. A failing hook is logged and skipped.
+        """
         cutoff = time.time() - JOB_TTL_SECONDS
         with self._lock:
             expired = [
@@ -146,7 +153,16 @@ class JobStore:
             ]
             for sid in expired:
                 del self._jobs[sid]
-        return len(expired)
+
+        if self.on_expire is not None:
+            for sid in expired:
+                try:
+                    self.on_expire(sid)
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "on_expire hook failed for session %s", sid, exc_info=True
+                    )
+        return expired
 
     # -- Background cleanup ------------------------------------------------
 
@@ -167,11 +183,10 @@ class JobStore:
             time.sleep(CLEANUP_INTERVAL_SECONDS)
             if not self._cleanup_running:
                 break
-            removed = self.cleanup_expired()
-            if removed > 0:
-                import logging
+            expired = self.cleanup_expired()
+            if expired:
                 logging.getLogger(__name__).info(
-                    "Job store cleanup: evicted %d expired entries", removed
+                    "Job store cleanup: evicted %d expired entries", len(expired)
                 )
 
 

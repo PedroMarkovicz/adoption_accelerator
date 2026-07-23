@@ -82,20 +82,25 @@ def test_save_image_rejects_non_uuid_session_id():
     assert not (session_storage.SESSIONS_DIR / "../etc").exists()
 
 
-def test_multipart_without_profile_returns_422_and_leaves_no_session_dir(tmp_path):
-    before = set(p.name for p in session_storage.SESSIONS_DIR.iterdir()) if session_storage.SESSIONS_DIR.is_dir() else set()
+def test_multipart_without_profile_returns_422_and_leaves_no_session_dir():
+    def _listing() -> set[str]:
+        if not session_storage.SESSIONS_DIR.is_dir():
+            return set()
+        return {p.name for p in session_storage.SESSIONS_DIR.iterdir()}
+
     with TestClient(app) as client:
+        before = _listing()
         resp = client.post("/predict", files={"images": ("a.jpg", b"x", "image/jpeg")})
+        after = _listing()
     assert resp.status_code == 422
-    after = set(p.name for p in session_storage.SESSIONS_DIR.iterdir()) if session_storage.SESSIONS_DIR.is_dir() else set()
     assert after == before
 
 
 def test_image_endpoint_serves_saved_file():
     sid = _sid()
-    session_storage.save_image(sid, 0, "a.png", b"png-bytes")
     try:
         with TestClient(app) as client:
+            session_storage.save_image(sid, 0, "a.png", b"png-bytes")
             resp = client.get(f"/predict/{sid}/images/0")
         assert resp.status_code == 200
         assert resp.content == b"png-bytes"
@@ -105,9 +110,9 @@ def test_image_endpoint_serves_saved_file():
 
 def test_image_endpoint_404_for_unknown_index():
     sid = _sid()
-    session_storage.save_image(sid, 0, "a.png", b"x")
     try:
         with TestClient(app) as client:
+            session_storage.save_image(sid, 0, "a.png", b"x")
             resp = client.get(f"/predict/{sid}/images/7")
         assert resp.status_code == 404
     finally:
@@ -118,3 +123,40 @@ def test_image_endpoint_404_for_non_uuid_session():
     with TestClient(app) as client:
         resp = client.get("/predict/not-a-uuid/images/0")
     assert resp.status_code == 404
+
+
+from app.api.services.job_store import JobStore
+
+
+def test_cleanup_expired_returns_ids_and_calls_on_expire(monkeypatch):
+    import app.api.services.job_store as js
+
+    monkeypatch.setattr(js, "JOB_TTL_SECONDS", -1)  # everything is already expired
+    store = JobStore()
+    seen: list[str] = []
+    store.on_expire = seen.append
+    store.create("session-a")
+    store.create("session-b")
+
+    expired = store.cleanup_expired()
+
+    assert sorted(expired) == ["session-a", "session-b"]
+    assert sorted(seen) == ["session-a", "session-b"]
+    assert store.get("session-a") is None
+
+
+def test_on_expire_failure_does_not_break_cleanup(monkeypatch):
+    import app.api.services.job_store as js
+
+    monkeypatch.setattr(js, "JOB_TTL_SECONDS", -1)
+    store = JobStore()
+
+    def boom(_sid: str) -> None:
+        raise RuntimeError("disk on fire")
+
+    store.on_expire = boom
+    store.create("session-a")
+
+    expired = store.cleanup_expired()  # must not raise
+
+    assert expired == ["session-a"]
