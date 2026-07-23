@@ -53,7 +53,7 @@ export function PhotoFeedback({ sessionId, imageCount, visual }: {
           const isBest = visual?.best_photo_index === i;
           return (
             <Card key={i} className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
-              <div className="h-40 sm:h-40">
+              <div className="h-40">
                 <ReportPhoto sessionId={sessionId} index={i} total={imageCount} />
               </div>
               <div className="min-w-0">

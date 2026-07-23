@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Dossier } from "@/components/report/Dossier";
-import { fullReport, degradedReport } from "./fixtures/report";
+import { fullReport, degradedReport, degradedReportWithPhotos } from "./fixtures/report";
 
 vi.mock("@/lib/useMeta", () => ({
   useMeta: () => ({ data: { adoption_speed_classes: [
@@ -21,5 +21,12 @@ describe("Dossier surface", () => {
   it("degrades gracefully when generative layers are missing", () => {
     render(<Dossier report={degradedReport} />);
     expect(screen.getByText(/generative layers were unavailable/i)).toBeInTheDocument();
+  });
+
+  it("still shows uploaded photos when generative layers fail, without contradicting itself", () => {
+    render(<Dossier report={degradedReportWithPhotos} />);
+    expect(screen.getByAltText(/Uploaded photo 1 of 2/)).toBeInTheDocument();
+    const note = screen.getByText(/generative layers were unavailable/i);
+    expect(note.textContent).not.toMatch(/photo feedback/i);
   });
 });

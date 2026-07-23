@@ -30,7 +30,7 @@ export function Dossier({ report }: { report: AdoptionReport }) {
         )}
         {noGenerative && (
           <p className="rounded-xl border border-ink/10 bg-surface p-6 text-sm text-muted">
-            The prediction is ready. The generative layers were unavailable for this run, so photo feedback and
+            The prediction is ready. The generative layers were unavailable for this run, so the narrative and
             recommendations are not shown. Set OPENAI_API_KEY on the backend to enable them.
           </p>
         )}

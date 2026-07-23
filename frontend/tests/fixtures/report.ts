@@ -37,3 +37,9 @@ export const degradedReport = {
   visual: null, recommendations: null, narrative: "", optimized_description: null, headline: "Prediction ready",
   metadata: { session_id: "def", ml_model_version: "tuned_v1", timing_ms: {}, estimated_cost_usd: 0 },
 } as unknown as AdoptionReport;
+
+export const degradedReportWithPhotos = {
+  prediction: fullReport.prediction,
+  visual: null, recommendations: null, narrative: "", optimized_description: null, headline: "Prediction ready",
+  metadata: { session_id: "ghi", ml_model_version: "tuned_v1", timing_ms: {}, estimated_cost_usd: 0, image_count: 2 },
+} as unknown as AdoptionReport;

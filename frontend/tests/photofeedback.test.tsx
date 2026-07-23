@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { PhotoFeedback } from "@/components/report/PhotoFeedback";
 import type { VisualEvidence } from "@/lib/types";
 
@@ -56,5 +56,32 @@ describe("PhotoFeedback", () => {
       <PhotoFeedback sessionId="s1" imageCount={0} visual={null} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("pairs the assessment by image_index, not array position", () => {
+    const shiftedVisual = {
+      ...visual,
+      photos: [
+        {
+          image_index: 2,
+          quality: { sharpness: 3, lighting: 3, framing: 3, background: 3, issues: [] },
+          content: { pet_visible: true, expression: "calm", setting: "outdoor", distinctive_traits: [] },
+          appeal_score: 6,
+          improvement_suggestions: [],
+        },
+      ],
+    } as unknown as VisualEvidence;
+
+    render(<PhotoFeedback sessionId="s1" imageCount={3} visual={shiftedVisual} />);
+
+    const photoThreeImg = screen.getByAltText("Uploaded photo 3 of 3");
+    const photoThreeCard = photoThreeImg.closest(".rounded-2xl") as HTMLElement;
+    expect(within(photoThreeCard).getByText("Appeal 6/10")).toBeInTheDocument();
+
+    const photoOneImg = screen.getByAltText("Uploaded photo 1 of 3");
+    const photoOneCard = photoOneImg.closest(".rounded-2xl") as HTMLElement;
+    expect(within(photoOneCard).getByText("No visual assessment for this photo.")).toBeInTheDocument();
+
+    expect(screen.getAllByText("No visual assessment for this photo.")).toHaveLength(2);
   });
 });
