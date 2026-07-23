@@ -8,11 +8,13 @@ export function useReportStatus(id: string) {
     queryFn: () => api.getStatus(id),
     refetchInterval: (query) => {
       const s = query.state.data?.status;
-      return s === "done" || s === "error" ? false : 1500;
+      if (s === "done" || s === "error") return false;
+      if (query.state.status === "error") return false;
+      return 1500;
     },
   });
   return {
-    status: q.data?.status ?? "running",
+    status: q.data?.status ?? (q.isError ? "error" : "running"),
     report: q.data?.report ?? null,
     error: q.data?.error ?? (q.isError ? "Could not reach the server." : null),
     isPending: q.isPending,
