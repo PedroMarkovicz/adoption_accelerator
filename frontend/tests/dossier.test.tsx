@@ -27,8 +27,10 @@ describe("Dossier surface", () => {
     render(<Dossier report={degradedReportWithPhotos} />);
     // The fallback lead photo in the hero and the photo-feedback gallery both
     // legitimately render photo 1 (visual is null, so the hero falls back to
-    // index 0) -- so this now proves both spots render it, not just one.
-    expect(screen.getAllByAltText(/Uploaded photo 1 of 2/)).toHaveLength(2);
+    // index 0) -- so this proves both spots render it, each by its own
+    // (now distinct) accessible name.
+    expect(screen.getByAltText("Lead photo: uploaded photo 1 of 2")).toBeInTheDocument();
+    expect(screen.getByAltText("Uploaded photo 1 of 2")).toBeInTheDocument();
     const note = screen.getByText(/generative layers were unavailable/i);
     expect(note.textContent).not.toMatch(/photo feedback/i);
   });
@@ -40,7 +42,7 @@ describe("Dossier surface", () => {
     } as typeof fullReport;
     const { container } = render(<Dossier report={withImages} />);
     const hero = container.querySelector("header") as HTMLElement;
-    expect(within(hero).getByAltText("Uploaded photo 1 of 2")).toHaveAttribute(
+    expect(within(hero).getByAltText("Lead photo: uploaded photo 1 of 2")).toHaveAttribute(
       "src", "/api/predict/s1/images/0",
     );
   });

@@ -3,11 +3,12 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { reportImageUrl } from "@/lib/images";
 
-export function ReportPhoto({ sessionId, index, total, className }: {
+export function ReportPhoto({ sessionId, index, total, className, label }: {
   sessionId: string;
   index: number;
   total: number;
   className?: string;
+  label?: string;
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -26,7 +27,7 @@ export function ReportPhoto({ sessionId, index, total, className }: {
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={reportImageUrl(sessionId, index)}
-      alt={`Uploaded photo ${index + 1} of ${total}`}
+      alt={label ?? `Uploaded photo ${index + 1} of ${total}`}
       loading="lazy"
       onError={() => setFailed(true)}
       className={cn("h-full w-full rounded-lg object-cover", className)}

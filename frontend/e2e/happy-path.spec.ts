@@ -38,7 +38,7 @@ test("wizard to dossier happy path", async ({ page }) => {
   await expect(page.getByText(/Assembling the case|The verdict/)).toBeVisible();
   await expect(page.getByText("The verdict")).toBeVisible({ timeout: 90000 });
 
-  // The uploaded photo renders in both the verdict hero and the photo-feedback
-  // card (intended duplication with a single photo), so scope to .first().
-  await expect(page.getByAltText(/Uploaded photo 1 of 1/).first()).toBeVisible({ timeout: 30000 });
+  // The uploaded photo renders in both the verdict hero (with a distinct
+  // "Lead photo: ..." accessible name) and the photo-feedback gallery.
+  await expect(page.getByAltText(/Uploaded photo 1 of 1/)).toBeVisible({ timeout: 30000 });
 });

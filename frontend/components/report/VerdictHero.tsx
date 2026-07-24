@@ -15,7 +15,12 @@ export function VerdictHero({ report, classes }: { report: AdoptionReport; class
       <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
         {showPhoto && (
           <div className="h-44 w-44 shrink-0">
-            <ReportPhoto sessionId={report.metadata.session_id} index={leadIndex} total={imageCount} />
+            <ReportPhoto
+              sessionId={report.metadata.session_id}
+              index={leadIndex}
+              total={imageCount}
+              label={`Lead photo: uploaded photo ${leadIndex + 1} of ${imageCount}`}
+            />
           </div>
         )}
         <div className="min-w-0">
