@@ -61,4 +61,17 @@ describe("loadListingFonts", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404 }) as unknown as Response));
     expect(await loadListingFonts()).toBeNull();
   });
+
+  it("loads both fonts and keeps display/body matched to their own path", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (path: string) => {
+      const body = path.includes("fraunces") ? "FRAUNCES_BYTES" : "GEIST_BYTES";
+      return { ok: true, blob: async () => new Blob([body], { type: "font/woff2" }) } as unknown as Response;
+    }));
+
+    const fonts = await loadListingFonts();
+
+    expect(fonts).not.toBeNull();
+    expect(fonts?.display).toContain(btoa("FRAUNCES_BYTES"));
+    expect(fonts?.body).toContain(btoa("GEIST_BYTES"));
+  });
 });

@@ -18,7 +18,10 @@ async function toDataUri(blob: Blob): Promise<string> {
 /**
  * Downscale an image blob to MAX_EDGE on its longest side and re-encode it as
  * JPEG. Uses <canvas>, so it cannot run under jsdom; loadListingImages accepts
- * a replacement so its own logic stays testable.
+ * a replacement so its own logic stays testable. Throws if a 2D canvas
+ * context is unavailable rather than silently falling back to the original
+ * blob; loadListingImages' per-image try/catch turns that into a skipped
+ * image.
  */
 export async function downscaleToDataUri(blob: Blob): Promise<string> {
   const bitmap = await createImageBitmap(blob);
@@ -27,7 +30,7 @@ export async function downscaleToDataUri(blob: Blob): Promise<string> {
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
   const ctx = canvas.getContext("2d");
-  if (ctx === null) return toDataUri(blob);
+  if (ctx === null) throw new Error("Failed to acquire a 2D canvas context for image downscaling");
   ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
@@ -36,9 +39,9 @@ export async function downscaleToDataUri(blob: Blob): Promise<string> {
 }
 
 /**
- * Fetch and inline every uploaded photo. A photo that cannot be retrieved is
- * skipped; the surviving photos keep their original upload index so the hero
- * selection in buildListingHtml stays correct.
+ * Fetch and inline every uploaded photo. A photo that cannot be retrieved or
+ * encoded is skipped; the surviving photos keep their original upload index
+ * so the hero selection in buildListingHtml stays correct.
  */
 export async function loadListingImages(
   sessionId: string,
