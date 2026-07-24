@@ -74,12 +74,10 @@ describe("PhotoFeedback", () => {
 
     render(<PhotoFeedback sessionId="s1" imageCount={3} visual={shiftedVisual} />);
 
-    const photoThreeImg = screen.getByAltText("Uploaded photo 3 of 3");
-    const photoThreeCard = photoThreeImg.closest(".rounded-2xl") as HTMLElement;
+    const photoThreeCard = screen.getByTestId("photo-card-2");
     expect(within(photoThreeCard).getByText("Appeal 6/10")).toBeInTheDocument();
 
-    const photoOneImg = screen.getByAltText("Uploaded photo 1 of 3");
-    const photoOneCard = photoOneImg.closest(".rounded-2xl") as HTMLElement;
+    const photoOneCard = screen.getByTestId("photo-card-0");
     expect(within(photoOneCard).getByText("No visual assessment for this photo.")).toBeInTheDocument();
 
     expect(screen.getAllByText("No visual assessment for this photo.")).toHaveLength(2);
