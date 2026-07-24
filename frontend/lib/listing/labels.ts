@@ -23,6 +23,20 @@ function lookup(
   return hit ? (hit.name ?? hit.label ?? null) : null;
 }
 
+function resolveAndJoin(
+  ids: (number | null | undefined)[],
+  lookupOptions: { id: number; name?: string; label?: string }[] | undefined,
+): string | null {
+  const resolved = ids
+    .map((id) => lookup(lookupOptions, id ?? 0))
+    .filter((val): val is string => val !== null);
+
+  // Remove duplicates while preserving order
+  const unique = Array.from(new Set(resolved));
+
+  return unique.length > 0 ? unique.join(" / ") : null;
+}
+
 function formatAge(months: number): string {
   if (months < 12) return `${months} month${months === 1 ? "" : "s"}`;
   const years = Math.floor(months / 12);
@@ -43,12 +57,12 @@ export function buildListingLabels(
 ): ListingLabels {
   const species = profile.pet_type;
   const primary = lookup(meta?.breeds, profile.breed1);
-  const secondary = lookup(meta?.breeds, profile.breed2 ?? 0);
-  const breed = primary && secondary ? `${primary} / ${secondary}` : primary;
+  const breed = resolveAndJoin([profile.breed1, profile.breed2], meta?.breeds);
 
-  const colors = [profile.color1, profile.color2, profile.color3]
-    .map((id) => lookup(meta?.colors, id ?? 0))
-    .filter((c): c is string => c !== null);
+  const colors = resolveAndJoin(
+    [profile.color1, profile.color2, profile.color3],
+    meta?.colors,
+  );
 
   const name = (profile.name ?? "").trim();
   const band = ageBand(profile.age_months);
@@ -64,7 +78,7 @@ export function buildListingLabels(
     title,
     species,
     breed,
-    colors: colors.length > 0 ? colors.join(" / ") : null,
+    colors,
     age: formatAge(profile.age_months),
     gender: profile.gender,
     size: lookup(meta?.maturity_sizes, profile.maturity_size),

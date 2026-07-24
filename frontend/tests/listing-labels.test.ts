@@ -106,4 +106,25 @@ describe("buildListingLabels", () => {
       { label: "Health", value: "Healthy" },
     ]);
   });
+
+  it("shows the secondary breed alone when the primary does not resolve", () => {
+    const labels = buildListingLabels(
+      { ...base, breed1: 9999, breed2: 141 },
+      meta,
+    );
+    expect(labels.breed).toBe("Beagle");
+  });
+
+  it("deduplicates when the same breed is selected for both slots", () => {
+    const labels = buildListingLabels({ ...base, breed1: 141, breed2: 141 }, meta);
+    expect(labels.breed).toBe("Beagle");
+  });
+
+  it("deduplicates when the same color is selected multiple times", () => {
+    const labels = buildListingLabels(
+      { ...base, color1: 1, color2: 1, color3: 1 },
+      meta,
+    );
+    expect(labels.colors).toBe("Black");
+  });
 });
