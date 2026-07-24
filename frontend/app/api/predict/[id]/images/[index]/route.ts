@@ -19,6 +19,7 @@ export async function GET(
     headers: {
       "content-type": res.headers.get("content-type") ?? "application/octet-stream",
       "cache-control": "private, max-age=3600",
+      "x-content-type-options": res.headers.get("x-content-type-options") ?? "nosniff",
     },
   });
 }
