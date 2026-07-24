@@ -64,4 +64,12 @@ describe("ListingPreview", () => {
     const link = (await screen.findByRole("link", { name: /download/i })) as HTMLAnchorElement;
     expect(link.getAttribute("download")).toBe("listing-pet-s1.html");
   });
+
+  it("slugifies punctuation and spaces in the pet name", async () => {
+    render(
+      <ListingPreview report={report} listing={{ ...(listing as object), name: "  Milo & Friends!  " } as never} />,
+    );
+    const link = (await screen.findByRole("link", { name: /download/i })) as HTMLAnchorElement;
+    expect(link.getAttribute("download")).toBe("listing-milo-friends-s1.html");
+  });
 });

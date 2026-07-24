@@ -23,6 +23,10 @@ const TEAL = "#0E7C7B";
 
 function fontFaces(fonts: ListingFonts | null): string {
   if (!fonts) return "";
+  // These src values are base64 data URIs produced by readAsDataURL, so they
+  // never contain quotes or angle brackets. That controlled input, not the
+  // escapeHtml call, is what keeps this url() safe: HTML entities are not
+  // decoded inside a <style> raw-text element. The escape is defense in depth.
   return `
 @font-face { font-family: "ListingDisplay"; src: url("${escapeHtml(fonts.display)}") format("woff2"); font-display: swap; }
 @font-face { font-family: "ListingBody"; src: url("${escapeHtml(fonts.body)}") format("woff2"); font-display: swap; }`;

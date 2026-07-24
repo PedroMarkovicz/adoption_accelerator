@@ -91,7 +91,7 @@ export function ListingPreview({
               <a
                 href={href}
                 download={fileName(listing, sessionId)}
-                className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition bg-transparent text-ink hover:bg-ink/5"
+                className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition bg-transparent text-ink hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
               >
                 Download listing
               </a>
