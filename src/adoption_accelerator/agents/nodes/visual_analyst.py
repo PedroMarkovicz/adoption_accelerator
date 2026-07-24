@@ -53,7 +53,7 @@ def load_images_base64(
 ) -> list[tuple[int, str, str]]:
     """Load up to ``cap`` readable images as (index, mime, base64)."""
     loaded: list[tuple[int, str, str]] = []
-    for path in paths:
+    for i, path in enumerate(paths):
         if len(loaded) >= cap:
             break
         try:
@@ -62,7 +62,7 @@ def load_images_base64(
             logger.warning("Skipping unreadable image %s: %s", path, exc)
             continue
         mime = mimetypes.guess_type(path)[0] or "image/jpeg"
-        loaded.append((len(loaded), mime, base64.b64encode(data).decode("ascii")))
+        loaded.append((i, mime, base64.b64encode(data).decode("ascii")))
     return loaded
 
 
