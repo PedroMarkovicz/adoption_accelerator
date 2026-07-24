@@ -55,6 +55,21 @@ h2 { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: 
 .note { font-size: 12px; color: ${MUTED}; font-style: italic; margin-bottom: 10px; }
 .thumbs { display: flex; gap: 10px; margin-top: 26px; }
 .thumbs img { width: 92px; height: 92px; object-fit: cover; }
+.brief-row { display: flex; gap: 28px; margin-top: 22px; }
+.brief-col { flex: 1; }
+.brief-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: ${MUTED}; margin-bottom: 8px; }
+.verdict { font-family: "ListingDisplay", Georgia, serif; font-size: 24px; margin-top: 14px; }
+.conf { font-size: 13px; color: ${MUTED}; }
+.spectrum { display: flex; gap: 3px; margin-top: 14px; }
+.seg { flex: 1; height: 10px; opacity: 0.28; }
+.seg.marker { opacity: 1; height: 16px; margin-top: -3px; }
+.seg-labels { display: flex; gap: 3px; margin-top: 6px; font-size: 9px; color: ${MUTED}; }
+.seg-labels span { flex: 1; text-align: center; }
+.actions { margin-top: 26px; font-size: 14px; }
+.action { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid ${PAPER}; }
+.action b { font-weight: 600; }
+.action i { color: ${TEAL}; font-style: normal; white-space: nowrap; }
+.footer { margin-top: 28px; font-size: 11px; color: ${MUTED}; letter-spacing: 0.08em; }
 @page { size: A4; margin: 14mm; }
 @media print {
   body { background: ${SURFACE}; }
@@ -132,9 +147,67 @@ function renderAd(input: ListingInput): string {
 </section>`;
 }
 
-/** Page 2 is added in the next task. */
-function renderBrief(_input: ListingInput): string {
-  return "";
+function renderSpectrum(input: ListingInput): string {
+  const predicted = input.report.prediction.predicted_class;
+  const segs = input.classes
+    .map(
+      (c) =>
+        `<div class="seg${c.index === predicted ? " marker" : ""}" style="background:${c.color}"></div>`,
+    )
+    .join("");
+  const names = input.classes
+    .map((c) => `<span>${escapeHtml(c.label)}</span>`)
+    .join("");
+  return `<div class="spectrum">${segs}</div><div class="seg-labels">${names}</div>`;
+}
+
+function renderComparison(input: ListingInput): string {
+  const optimized = (input.report.optimized_description ?? "").trim();
+  const original = (input.profile.description ?? "").trim();
+
+  if (!optimized) {
+    return `<p class="note">No rewritten description was produced for this run, so there is nothing to compare.</p>`;
+  }
+  return `<div class="brief-row">
+    <div class="brief-col">
+      <div class="brief-label">Before</div>
+      <p class="body-copy">${original ? escapeHtml(original) : "No original description was provided."}</p>
+    </div>
+    <div class="brief-col">
+      <div class="brief-label">After</div>
+      <p class="body-copy">${escapeHtml(optimized)}</p>
+    </div>
+  </div>`;
+}
+
+function renderActions(input: ListingInput): string {
+  const recs = input.report.recommendations?.recommendations ?? [];
+  if (recs.length === 0) return "";
+  const top = [...recs].sort((a, b) => a.priority - b.priority).slice(0, 3);
+  const rows = top
+    .map(
+      (r) =>
+        `<div class="action"><b>${escapeHtml(r.action)}</b><i>${escapeHtml(
+          r.measured_impact?.expected_speedup ?? "",
+        )}</i></div>`,
+    )
+    .join("");
+  return `<h2 style="margin-top:30px">What would move the needle</h2><div class="actions">${rows}</div>`;
+}
+
+function renderBrief(input: ListingInput): string {
+  const p = input.report.prediction;
+  const meta = input.report.metadata;
+  const date = (meta.timestamp ?? "").slice(0, 10);
+  return `<section class="page">
+  <h2>Why this works</h2>
+  <div class="verdict">${escapeHtml(p.prediction_label)}</div>
+  <div class="conf">Confidence ${Math.round((p.class_confidence ?? 0) * 100)}%</div>
+  ${renderSpectrum(input)}
+  ${renderComparison(input)}
+  ${renderActions(input)}
+  <div class="footer">${escapeHtml(meta.ml_model_version ?? "")}${date ? ` &middot; ${escapeHtml(date)}` : ""}</div>
+</section>`;
 }
 
 export function buildListingHtml(input: ListingInput): string {
