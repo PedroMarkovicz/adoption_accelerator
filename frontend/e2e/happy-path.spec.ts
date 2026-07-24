@@ -10,6 +10,10 @@ test("wizard to dossier happy path", async ({ page }) => {
   await page.goto("/predict");
   await expect(page.getByText("The basics")).toBeVisible();
 
+  // Fill the name so the generated listing title ("Meet {name}") is
+  // meaningful below instead of falling back to "A young dog".
+  await page.locator("#name").fill("Milo");
+
   // Step 1 -> Appearance
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Appearance")).toBeVisible();
@@ -41,4 +45,20 @@ test("wizard to dossier happy path", async ({ page }) => {
   // The uploaded photo renders in both the verdict hero (with a distinct
   // "Lead photo: ..." accessible name) and the photo-feedback gallery.
   await expect(page.getByAltText(/Uploaded photo 1 of 1/)).toBeVisible({ timeout: 30000 });
+
+  // The listing artifact loads its assets client-side after the Dossier
+  // appears (backend image endpoint -> binary BFF proxy -> canvas downscale
+  // to a data URI -> buildListingHtml), so give it a generous timeout.
+  const preview = page.getByTitle("Listing preview");
+  await expect(preview).toBeVisible({ timeout: 30000 });
+
+  // The artifact is the iframe's own document, so assert inside the frame.
+  const frame = page.frameLocator('iframe[title="Listing preview"]');
+  await expect(frame.locator("h1")).toContainText("Meet Milo");
+  // The real proof: the hero image only renders if the photo survived the
+  // backend endpoint, the binary BFF proxy, and the canvas downscale.
+  await expect(frame.locator("img.hero")).toBeVisible({ timeout: 30000 });
+
+  const download = page.getByRole("link", { name: /download listing/i });
+  await expect(download).toHaveAttribute("download", /^listing-.*\.html$/);
 });
