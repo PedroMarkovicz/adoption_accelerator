@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.main import app
 from app.api.services import session_storage
+from app.api.services.job_store import JobStore
 
 
 def _sid() -> str:
@@ -96,6 +97,85 @@ def test_multipart_without_profile_returns_422_and_leaves_no_session_dir():
     assert after == before
 
 
+_VALID_PROFILE_JSON = (
+    '{"pet_type": "Dog", "age_months": 12, "gender": "Male", "breed1": 1, '
+    '"maturity_size": 2, "fur_length": 1, "vaccinated": "Yes", "dewormed": "Yes", '
+    '"sterilized": "No", "health": "Healthy"}'
+)
+
+
+def _session_dir_listing() -> set[str]:
+    if not session_storage.SESSIONS_DIR.is_dir():
+        return set()
+    return {p.name for p in session_storage.SESSIONS_DIR.iterdir()}
+
+
+def test_multipart_too_many_images_returns_413_and_leaves_no_session_dir():
+    from app.api.routers.predict import MAX_IMAGES
+
+    files = [
+        ("images", (f"{i}.jpg", b"x", "image/jpeg")) for i in range(MAX_IMAGES + 1)
+    ]
+
+    with TestClient(app) as client:
+        before = _session_dir_listing()
+        resp = client.post(
+            "/predict", data={"profile": _VALID_PROFILE_JSON}, files=files
+        )
+        after = _session_dir_listing()
+
+    assert resp.status_code == 413
+    assert after == before
+
+
+def test_multipart_oversized_image_returns_413_and_leaves_no_session_dir():
+    from app.api.routers.predict import MAX_IMAGE_BYTES
+
+    oversized = b"x" * (MAX_IMAGE_BYTES + 1)
+
+    with TestClient(app) as client:
+        before = _session_dir_listing()
+        resp = client.post(
+            "/predict",
+            data={"profile": _VALID_PROFILE_JSON},
+            files={"images": ("big.jpg", oversized, "image/jpeg")},
+        )
+        after = _session_dir_listing()
+
+    assert resp.status_code == 413
+    assert after == before
+
+
+def test_mid_upload_failure_cleans_up_session_dir(monkeypatch):
+    original_save_image = session_storage.save_image
+    call_count = {"n": 0}
+    captured_session_id = {}
+
+    def flaky_save_image(session_id, index, filename, content):
+        captured_session_id["id"] = session_id
+        call_count["n"] += 1
+        if call_count["n"] == 2:
+            raise OSError("disk full")
+        return original_save_image(session_id, index, filename, content)
+
+    monkeypatch.setattr(session_storage, "save_image", flaky_save_image)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.post(
+            "/predict",
+            data={"profile": _VALID_PROFILE_JSON},
+            files=[
+                ("images", ("a.jpg", b"x", "image/jpeg")),
+                ("images", ("b.jpg", b"y", "image/jpeg")),
+            ],
+        )
+
+    assert resp.status_code == 500
+    sid = captured_session_id.get("id")
+    assert sid is not None
+    assert not (session_storage.SESSIONS_DIR / sid).exists()
+
+
 def test_image_endpoint_serves_saved_file():
     sid = _sid()
     try:
@@ -123,9 +203,6 @@ def test_image_endpoint_404_for_non_uuid_session():
     with TestClient(app) as client:
         resp = client.get("/predict/not-a-uuid/images/0")
     assert resp.status_code == 404
-
-
-from app.api.services.job_store import JobStore
 
 
 def test_cleanup_expired_returns_ids_and_calls_on_expire(monkeypatch):

@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+MAX_IMAGES = 8
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
 
 async def _parse_request(
     request: Request,
@@ -63,11 +66,22 @@ async def _parse_request(
             if isinstance(value, UploadFile)
         ]
 
+        if len(raw_images) > MAX_IMAGES:
+            raise HTTPException(
+                status_code=413,
+                detail="Too many images. Upload at most 8.",
+            )
+
         image_paths: list[str] = []
         for img_file in raw_images:
             content = await img_file.read()
             if not content:
                 continue
+            if len(content) > MAX_IMAGE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Image too large. Each image must be under 5 MB.",
+                )
             path = session_storage.save_image(
                 session_id,
                 len(image_paths),
@@ -175,4 +189,4 @@ def get_prediction_image(session_id: str, index: int) -> FileResponse:
     path = session_storage.find_image(session_id, index)
     if path is None:
         raise HTTPException(status_code=404, detail="Image not found.")
-    return FileResponse(path)
+    return FileResponse(path, headers={"X-Content-Type-Options": "nosniff"})
