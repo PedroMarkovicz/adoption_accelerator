@@ -57,4 +57,9 @@ describe("Dossier surface", () => {
     const header = container.querySelector("header");
     expect(within(header!).queryByRole("img")).toBeNull();
   });
+
+  it("hides the listing preview when no profile is available", () => {
+    render(<Dossier report={fullReport} listing={null} />);
+    expect(screen.queryByTitle("Listing preview")).toBeNull();
+  });
 });

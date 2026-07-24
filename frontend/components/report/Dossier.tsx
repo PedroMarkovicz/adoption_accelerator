@@ -3,6 +3,7 @@ import type { AdoptionReport, PetProfileRequest } from "@/lib/types";
 import { useMeta } from "@/lib/useMeta";
 import { buildSpeedClasses } from "@/lib/spectrum";
 import { VerdictHero } from "./VerdictHero";
+import { ListingPreview } from "./ListingPreview";
 import { Recommendations } from "./Recommendations";
 import { RewrittenCopy } from "./RewrittenCopy";
 import { PhotoFeedback } from "./PhotoFeedback";
@@ -25,6 +26,7 @@ export function Dossier({
     <main className="mx-auto max-w-3xl px-6 py-12">
       <VerdictHero report={report} classes={classes} />
       <div className="mt-12 flex flex-col gap-14">
+        {listing && <ListingPreview report={report} listing={listing} />}
         {report.recommendations && <Recommendations recs={report.recommendations} classes={classes} />}
         {report.optimized_description && <RewrittenCopy text={report.optimized_description} />}
         {imageCount > 0 && (
