@@ -16,6 +16,7 @@ export function useReportStatus(id: string) {
   return {
     status: q.data?.status ?? (q.isError ? "error" : "running"),
     report: q.data?.report ?? null,
+    listing: q.data?.listing ?? null,
     error: q.data?.error ?? (q.isError ? (q.error instanceof Error ? q.error.message : "Could not reach the server.") : null),
     isPending: q.isPending,
   };

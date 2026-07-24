@@ -9,9 +9,9 @@ import { Dossier } from "@/components/report/Dossier";
 export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { status, report, error } = useReportStatus(id);
+  const { status, report, listing, error } = useReportStatus(id);
 
   if (status === "error") return <ReportError message={error ?? "Unknown error"} onRetry={() => router.push("/predict")} />;
   if (status !== "done" || !report) return <Assembling />;
-  return <Dossier report={report} />;
+  return <Dossier report={report} listing={listing} />;
 }

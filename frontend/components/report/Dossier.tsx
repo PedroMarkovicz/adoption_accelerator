@@ -1,5 +1,5 @@
 "use client";
-import type { AdoptionReport } from "@/lib/types";
+import type { AdoptionReport, PetProfileRequest } from "@/lib/types";
 import { useMeta } from "@/lib/useMeta";
 import { buildSpeedClasses } from "@/lib/spectrum";
 import { VerdictHero } from "./VerdictHero";
@@ -8,7 +8,13 @@ import { RewrittenCopy } from "./RewrittenCopy";
 import { PhotoFeedback } from "./PhotoFeedback";
 import { PeelBack } from "./PeelBack";
 
-export function Dossier({ report }: { report: AdoptionReport }) {
+export function Dossier({
+  report,
+  listing,
+}: {
+  report: AdoptionReport;
+  listing: PetProfileRequest | null;
+}) {
   const { data: meta } = useMeta();
   const classes = buildSpeedClasses(meta?.adoption_speed_classes ?? []);
   const imageCount = report.metadata.image_count ?? 0;

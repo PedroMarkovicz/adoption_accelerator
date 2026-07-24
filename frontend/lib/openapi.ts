@@ -506,6 +506,111 @@ export interface components {
             /** Global Importance */
             global_importance: components["schemas"]["GlobalFeatureImportance"][];
         };
+        /** PetProfileRequest */
+        PetProfileRequest: {
+            /**
+             * Pet Type
+             * @enum {string}
+             */
+            pet_type: "Dog" | "Cat";
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Age Months */
+            age_months: number;
+            /**
+             * Gender
+             * @enum {string}
+             */
+            gender: "Male" | "Female" | "Mixed";
+            /**
+             * Breed1
+             * @description Primary breed ID
+             */
+            breed1: number;
+            /**
+             * Breed2
+             * @description Secondary breed ID, 0 = none
+             * @default 0
+             */
+            breed2: number;
+            /**
+             * Color1
+             * @description Primary color ID, 0 = unspecified
+             * @default 0
+             */
+            color1: number;
+            /**
+             * Color2
+             * @description Secondary color ID, 0 = none
+             * @default 0
+             */
+            color2: number;
+            /**
+             * Color3
+             * @description Tertiary color ID, 0 = none
+             * @default 0
+             */
+            color3: number;
+            /**
+             * Maturity Size
+             * @enum {integer}
+             */
+            maturity_size: 1 | 2 | 3 | 4;
+            /**
+             * Fur Length
+             * @enum {integer}
+             */
+            fur_length: 1 | 2 | 3;
+            /**
+             * Vaccinated
+             * @enum {string}
+             */
+            vaccinated: "Yes" | "No" | "Not Sure";
+            /**
+             * Dewormed
+             * @enum {string}
+             */
+            dewormed: "Yes" | "No" | "Not Sure";
+            /**
+             * Sterilized
+             * @enum {string}
+             */
+            sterilized: "Yes" | "No" | "Not Sure";
+            /**
+             * Health
+             * @enum {string}
+             */
+            health: "Healthy" | "Minor Injury" | "Serious Injury";
+            /**
+             * Fee
+             * @default 0
+             */
+            fee: number;
+            /**
+             * Quantity
+             * @default 1
+             */
+            quantity: number;
+            /**
+             * State
+             * @description Malaysian state ID, 0 = unspecified
+             * @default 0
+             */
+            state: number;
+            /**
+             * Video Amt
+             * @default 0
+             */
+            video_amt: number;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
         /** PhotoAssessment */
         PhotoAssessment: {
             /** Image Index */
@@ -686,6 +791,7 @@ export interface components {
             /** Status */
             status: string;
             report?: components["schemas"]["AdoptionReport"] | null;
+            listing?: components["schemas"]["PetProfileRequest"] | null;
             /** Error */
             error?: string | null;
         };

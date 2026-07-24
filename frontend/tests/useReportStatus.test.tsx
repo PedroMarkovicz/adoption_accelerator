@@ -30,4 +30,25 @@ describe("useReportStatus", () => {
     const { result } = renderHook(() => useReportStatus("x"), { wrapper: wrapNoRetry() });
     await waitFor(() => expect(result.current.status).toBe("error"));
   });
+
+  it("exposes the listing profile from the status response", async () => {
+    vi.spyOn(apiMod.api, "getStatus").mockResolvedValue({
+      session_id: "abc", status: "done",
+      report: { prediction: { predicted_class: 1 } } as never,
+      listing: { pet_type: "Dog", name: "Milo", age_months: 8 },
+    } as never);
+    const { result } = renderHook(() => useReportStatus("abc"), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.listing?.name).toBe("Milo");
+  });
+
+  it("reports a null listing when the response omits it", async () => {
+    vi.spyOn(apiMod.api, "getStatus").mockResolvedValue({
+      session_id: "abc", status: "done",
+      report: { prediction: { predicted_class: 1 } } as never,
+    } as never);
+    const { result } = renderHook(() => useReportStatus("abc"), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.listing).toBeNull();
+  });
 });
