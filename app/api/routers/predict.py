@@ -123,7 +123,7 @@ async def predict(request: Request) -> JSONResponse:
 
     try:
         prediction_request = translate_request(pet, image_paths=image_paths)
-        job_store.create(session_id)
+        job_store.create(session_id, profile=pet.model_dump())
 
         run_report_background(session_id, prediction_request, graph_app)
 
@@ -163,6 +163,12 @@ def get_prediction_status(session_id: str) -> ReportStatusResponse:
             error=job.error,
         )
 
+    listing = (
+        PetProfileRequest.model_validate(job.profile)
+        if job.profile is not None
+        else None
+    )
+
     if job.status == "complete":
         report = (
             AdoptionReport.model_validate(job.phase1_result)
@@ -173,10 +179,11 @@ def get_prediction_status(session_id: str) -> ReportStatusResponse:
             session_id=session_id,
             status="done",
             report=report,
+            listing=listing,
         )
 
     # pending / phase1_ready (legacy) -- still running
-    return ReportStatusResponse(session_id=session_id, status="running")
+    return ReportStatusResponse(session_id=session_id, status="running", listing=listing)
 
 
 @router.get("/predict/{session_id}/images/{index}")

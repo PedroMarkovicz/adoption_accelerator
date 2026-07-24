@@ -26,6 +26,7 @@ class JobRecord:
     phase1_result: dict[str, Any] | None = None
     phase2_result: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
+    profile: dict[str, Any] | None = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
 
@@ -45,10 +46,10 @@ class JobStore:
 
     # -- Public API --------------------------------------------------------
 
-    def create(self, session_id: str) -> None:
-        """Register a new pending job."""
+    def create(self, session_id: str, profile: dict[str, Any] | None = None) -> None:
+        """Register a new pending job, optionally with the submitted profile."""
         with self._lock:
-            self._jobs[session_id] = JobRecord()
+            self._jobs[session_id] = JobRecord(profile=profile)
 
     def set_phase1_ready(
         self,
@@ -117,6 +118,7 @@ class JobStore:
                 phase1_result=job.phase1_result,
                 phase2_result=job.phase2_result,
                 metadata=job.metadata,
+                profile=job.profile,
                 error=job.error,
                 created_at=job.created_at,
             )
@@ -132,6 +134,7 @@ class JobStore:
                         phase1_result=job.phase1_result,
                         phase2_result=job.phase2_result,
                         metadata=job.metadata,
+                        profile=job.profile,
                         error=job.error,
                         created_at=job.created_at,
                     ),

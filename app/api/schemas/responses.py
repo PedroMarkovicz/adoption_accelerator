@@ -17,6 +17,8 @@ from pydantic import BaseModel
 
 from adoption_accelerator.agents.contracts import AdoptionReport
 
+from app.api.schemas.requests import PetProfileRequest
+
 
 class ReportStatusResponse(BaseModel):
     """Status/result wrapper returned by POST /predict and its status poll."""
@@ -24,6 +26,7 @@ class ReportStatusResponse(BaseModel):
     session_id: str
     status: str  # queued / running / done / error
     report: Optional[AdoptionReport] = None
+    listing: Optional[PetProfileRequest] = None
     error: Optional[str] = None
 
 
