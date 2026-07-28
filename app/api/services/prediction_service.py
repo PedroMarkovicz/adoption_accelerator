@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import shutil
 import threading
 from typing import Any
 
@@ -88,20 +86,10 @@ def translate_request(
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_temp_dir(temp_dir: str | None) -> None:
-    """Remove a temp directory created for uploaded images."""
-    if temp_dir and os.path.isdir(temp_dir):
-        try:
-            shutil.rmtree(temp_dir)
-        except Exception as exc:
-            logger.warning("Failed to clean up temp dir %s: %s", temp_dir, exc)
-
-
 def run_report_background(
     session_id: str,
     request: PredictionRequest,
     graph_app: Any,
-    temp_dir: str | None = None,
 ) -> threading.Thread:
     """Run the Evidence Board graph in a background thread.
 
@@ -110,9 +98,8 @@ def run_report_background(
     and stores it in the job store. On failure (exception or missing
     report) the job is marked as errored instead.
 
-    This function is the target for ``threading.Thread``; it returns the
-    started (daemon) thread. Any temp directory created for uploaded
-    images is cleaned up once the run finishes.
+    Uploaded images are NOT removed here: they live under the session's
+    directory and are deleted when the job expires.
     """
 
     def _worker() -> None:
@@ -143,8 +130,6 @@ def run_report_background(
         except Exception as exc:
             logger.exception("Report graph failed for session %s", session_id)
             job_store.set_error(session_id, str(exc))
-        finally:
-            _cleanup_temp_dir(temp_dir)
 
     thread = threading.Thread(target=_worker, daemon=True)
     thread.start()

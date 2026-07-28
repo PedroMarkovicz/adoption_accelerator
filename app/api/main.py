@@ -20,19 +20,26 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from adoption_accelerator.agents.graph import compile_report_graph
 from adoption_accelerator.inference.serving import get_inference_pipeline
 from app.api.middleware.error_handler import register_error_handlers
-from app.api.routers import explore, health, predict, predictions
+from app.api.routers import explore, health, meta, predict, predictions
+from app.api.services import session_storage
 from app.api.services.job_store import job_store
 
 logger = logging.getLogger(__name__)
 
 # Artifact paths
 _ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Load the repo-root .env so a locally-configured OPENAI_API_KEY (and other
+# secrets) reach the agent graph. Existing environment variables win.
+load_dotenv(_ROOT / ".env")
+
 _EXPLORE_DIR = _ROOT / "artifacts" / "explore"
 _REPORTS_DIR = _ROOT / "reports"
 _MODEL_DIR = _ROOT / "artifacts" / "models" / "tuned_v1"
@@ -113,7 +120,13 @@ async def lifespan(app: FastAPI):
     logger.info("Startup: compiling Evidence Board agent graph ...")
     app.state.graph = compile_report_graph()
 
+    logger.info("Startup: pruning orphaned session directories ...")
+    pruned = session_storage.prune_all()
+    if pruned:
+        logger.info("Removed %d orphaned session directories.", pruned)
+
     logger.info("Startup: starting job store cleanup thread ...")
+    job_store.on_expire = session_storage.delete_session
     job_store.start_cleanup_loop()
 
     # Load precomputed explore data (coerce None -> safe defaults so
@@ -179,6 +192,7 @@ def create_app() -> FastAPI:
     application.include_router(predict.router)
     application.include_router(explore.router)
     application.include_router(predictions.router)
+    application.include_router(meta.router)
 
     return application
 

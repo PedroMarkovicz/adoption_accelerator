@@ -14,13 +14,11 @@ The POST endpoint accepts **two content types**:
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.datastructures import UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from adoption_accelerator.agents.contracts import AdoptionReport
 
@@ -28,22 +26,27 @@ from app.api.schemas.requests import PetProfileRequest
 from app.api.schemas.responses import ReportStatusResponse
 from app.api.services.job_store import job_store
 from app.api.services.prediction_service import run_report_background, translate_request
+from app.api.services import session_storage
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+MAX_IMAGES = 8
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
 
 async def _parse_request(
     request: Request,
-) -> tuple[PetProfileRequest, list[str], str | None]:
+    session_id: str,
+) -> tuple[PetProfileRequest, list[str]]:
     """Parse the incoming request body, handling both JSON and multipart.
 
+    Uploaded images are persisted under the session's directory as
+    ``{index}{ext}`` so the report can serve them back later.
+
     Returns:
-        (pet, image_paths, temp_dir)
-        - pet: validated PetProfileRequest
-        - image_paths: list of temp file paths for uploaded images
-        - temp_dir: path to the temp directory (for cleanup), or None
+        (pet, image_paths)
     """
     content_type = request.headers.get("content-type", "")
 
@@ -57,37 +60,41 @@ async def _parse_request(
             )
         pet = PetProfileRequest.model_validate_json(str(profile_raw))
 
-        # Save uploaded images to a temp directory
+        raw_images: list[UploadFile] = [
+            value
+            for value in form.getlist("images")
+            if isinstance(value, UploadFile)
+        ]
+
+        if len(raw_images) > MAX_IMAGES:
+            raise HTTPException(
+                status_code=413,
+                detail="Too many images. Upload at most 8.",
+            )
+
         image_paths: list[str] = []
-        temp_dir: str | None = None
+        for img_file in raw_images:
+            content = await img_file.read()
+            if not content:
+                continue
+            if len(content) > MAX_IMAGE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Image too large. Each image must be under 5 MB.",
+                )
+            path = session_storage.save_image(
+                session_id,
+                len(image_paths),
+                img_file.filename or "",
+                content,
+            )
+            image_paths.append(str(path))
 
-        raw_images: list[UploadFile] = []
-        for key in form:
-            if key == "images":
-                val = form.getlist("images")
-                raw_images = [v for v in val if isinstance(v, UploadFile)]
-                break
+        return pet, image_paths
 
-        if raw_images:
-            temp_dir = tempfile.mkdtemp(prefix="adopt_img_")
-            for i, img_file in enumerate(raw_images):
-                content = await img_file.read()
-                if not content:
-                    continue
-                fname = img_file.filename or f"image_{i}.jpg"
-                # Sanitize filename to avoid path traversal
-                fname = os.path.basename(fname)
-                fpath = os.path.join(temp_dir, fname)
-                with open(fpath, "wb") as f:
-                    f.write(content)
-                image_paths.append(fpath)
-
-        return pet, image_paths, temp_dir
-    else:
-        # Standard JSON body
-        body = await request.json()
-        pet = PetProfileRequest.model_validate(body)
-        return pet, [], None
+    body = await request.json()
+    pet = PetProfileRequest.model_validate(body)
+    return pet, []
 
 
 @router.post("/predict", status_code=202)
@@ -100,8 +107,6 @@ async def predict(request: Request) -> JSONResponse:
 
     Accepts both ``application/json`` and ``multipart/form-data``.
     """
-    pet, image_paths, temp_dir = await _parse_request(request)
-
     graph_app = getattr(request.app.state, "graph", None)
     if graph_app is None:
         raise HTTPException(
@@ -110,17 +115,17 @@ async def predict(request: Request) -> JSONResponse:
         )
 
     session_id = str(uuid.uuid4())
+    try:
+        pet, image_paths = await _parse_request(request, session_id)
+    except Exception:
+        session_storage.delete_session(session_id)
+        raise
 
     try:
         prediction_request = translate_request(pet, image_paths=image_paths)
-        job_store.create(session_id)
+        job_store.create(session_id, profile=pet.model_dump())
 
-        run_report_background(
-            session_id,
-            prediction_request,
-            graph_app,
-            temp_dir=temp_dir,
-        )
+        run_report_background(session_id, prediction_request, graph_app)
 
         logger.info("Report generation started for session %s", session_id)
 
@@ -128,6 +133,7 @@ async def predict(request: Request) -> JSONResponse:
         return JSONResponse(status_code=202, content=response.model_dump())
 
     except Exception as exc:
+        session_storage.delete_session(session_id)
         logger.exception("Unexpected error while starting prediction")
         raise HTTPException(
             status_code=500, detail=f"Pipeline error: {exc}"
@@ -157,6 +163,12 @@ def get_prediction_status(session_id: str) -> ReportStatusResponse:
             error=job.error,
         )
 
+    listing = (
+        PetProfileRequest.model_validate(job.profile)
+        if job.profile is not None
+        else None
+    )
+
     if job.status == "complete":
         report = (
             AdoptionReport.model_validate(job.phase1_result)
@@ -167,7 +179,21 @@ def get_prediction_status(session_id: str) -> ReportStatusResponse:
             session_id=session_id,
             status="done",
             report=report,
+            listing=listing,
         )
 
     # pending / phase1_ready (legacy) -- still running
-    return ReportStatusResponse(session_id=session_id, status="running")
+    return ReportStatusResponse(session_id=session_id, status="running", listing=listing)
+
+
+@router.get("/predict/{session_id}/images/{index}")
+def get_prediction_image(session_id: str, index: int) -> FileResponse:
+    """Serve one uploaded image for a session, addressed by upload index.
+
+    The path is resolved inside the session's directory from the integer
+    index alone, so no user-controlled path segment is ever joined.
+    """
+    path = session_storage.find_image(session_id, index)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Image not found.")
+    return FileResponse(path, headers={"X-Content-Type-Options": "nosniff"})

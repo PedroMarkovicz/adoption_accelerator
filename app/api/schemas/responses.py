@@ -17,6 +17,8 @@ from pydantic import BaseModel
 
 from adoption_accelerator.agents.contracts import AdoptionReport
 
+from app.api.schemas.requests import PetProfileRequest
+
 
 class ReportStatusResponse(BaseModel):
     """Status/result wrapper returned by POST /predict and its status poll."""
@@ -24,6 +26,7 @@ class ReportStatusResponse(BaseModel):
     session_id: str
     status: str  # queued / running / done / error
     report: Optional[AdoptionReport] = None
+    listing: Optional[PetProfileRequest] = None
     error: Optional[str] = None
 
 
@@ -122,3 +125,42 @@ class RecentPredictionsResponse(BaseModel):
 
     predictions: list[RecentPredictionEntry]
     total_today: int
+
+
+# ---------------------------------------------------------------------------
+# GET /meta: reference data for the frontend
+# ---------------------------------------------------------------------------
+
+
+class SpeedClassEntry(BaseModel):
+    index: int
+    label: str
+
+
+class BreedOption(BaseModel):
+    id: int
+    type: int
+    name: str
+
+
+class LabeledOption(BaseModel):
+    id: int
+    name: str
+
+
+class IdLabel(BaseModel):
+    id: int
+    label: str
+
+
+class MetaResponse(BaseModel):
+    """Response for GET /meta: labels and categorical reference options."""
+
+    model_version: str
+    modality_breakdown: dict[str, int]
+    adoption_speed_classes: list[SpeedClassEntry]
+    breeds: list[BreedOption]
+    colors: list[LabeledOption]
+    states: list[LabeledOption]
+    maturity_sizes: list[IdLabel]
+    fur_lengths: list[IdLabel]

@@ -7,13 +7,14 @@ and automatic TTL-based cleanup of stale entries.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 # TTL for job entries (seconds)
-JOB_TTL_SECONDS = 600  # 10 minutes
+JOB_TTL_SECONDS = 21600  # 6 hours
 CLEANUP_INTERVAL_SECONDS = 60  # Run cleanup every 60 seconds
 
 
@@ -25,6 +26,7 @@ class JobRecord:
     phase1_result: dict[str, Any] | None = None
     phase2_result: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
+    profile: dict[str, Any] | None = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
 
@@ -40,13 +42,14 @@ class JobStore:
         self._lock = threading.Lock()
         self._jobs: dict[str, JobRecord] = {}
         self._cleanup_running = False
+        self.on_expire: Callable[[str], None] | None = None
 
     # -- Public API --------------------------------------------------------
 
-    def create(self, session_id: str) -> None:
-        """Register a new pending job."""
+    def create(self, session_id: str, profile: dict[str, Any] | None = None) -> None:
+        """Register a new pending job, optionally with the submitted profile."""
         with self._lock:
-            self._jobs[session_id] = JobRecord()
+            self._jobs[session_id] = JobRecord(profile=profile)
 
     def set_phase1_ready(
         self,
@@ -115,6 +118,7 @@ class JobStore:
                 phase1_result=job.phase1_result,
                 phase2_result=job.phase2_result,
                 metadata=job.metadata,
+                profile=job.profile,
                 error=job.error,
                 created_at=job.created_at,
             )
@@ -130,6 +134,7 @@ class JobStore:
                         phase1_result=job.phase1_result,
                         phase2_result=job.phase2_result,
                         metadata=job.metadata,
+                        profile=job.profile,
                         error=job.error,
                         created_at=job.created_at,
                     ),
@@ -137,8 +142,13 @@ class JobStore:
                 for sid, job in self._jobs.items()
             ]
 
-    def cleanup_expired(self) -> int:
-        """Remove entries older than JOB_TTL_SECONDS. Returns count removed."""
+    def cleanup_expired(self) -> list[str]:
+        """Remove entries older than JOB_TTL_SECONDS.
+
+        Returns the expired session ids. The ``on_expire`` hook (when set) is
+        invoked once per expired session OUTSIDE the lock, so a slow or failing
+        hook cannot block other callers. A failing hook is logged and skipped.
+        """
         cutoff = time.time() - JOB_TTL_SECONDS
         with self._lock:
             expired = [
@@ -146,7 +156,16 @@ class JobStore:
             ]
             for sid in expired:
                 del self._jobs[sid]
-        return len(expired)
+
+        if self.on_expire is not None:
+            for sid in expired:
+                try:
+                    self.on_expire(sid)
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "on_expire hook failed for session %s", sid, exc_info=True
+                    )
+        return expired
 
     # -- Background cleanup ------------------------------------------------
 
@@ -167,11 +186,10 @@ class JobStore:
             time.sleep(CLEANUP_INTERVAL_SECONDS)
             if not self._cleanup_running:
                 break
-            removed = self.cleanup_expired()
-            if removed > 0:
-                import logging
+            expired = self.cleanup_expired()
+            if expired:
                 logging.getLogger(__name__).info(
-                    "Job store cleanup: evicted %d expired entries", removed
+                    "Job store cleanup: evicted %d expired entries", len(expired)
                 )
 
 

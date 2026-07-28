@@ -152,6 +152,7 @@ class ReportMetadata(BaseModel):
     llm_models: dict[str, str] = Field(default_factory=dict)  # role -> model id
     timing_ms: dict[str, float] = Field(default_factory=dict)
     estimated_cost_usd: float = 0.0
+    image_count: int = 0
     errors: list[NodeError] = Field(default_factory=list)
     timestamp: str = ""
 
