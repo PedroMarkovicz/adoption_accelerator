@@ -17,10 +17,15 @@ from typing import Any
 
 from adoption_accelerator.agents.graph import get_graph_config
 from adoption_accelerator.agents.observability.audit import write_audit_record
-from adoption_accelerator.inference.contracts import PredictionRequest, TabularInput
+from adoption_accelerator.inference.contracts import (
+    ListingLabels,
+    PredictionRequest,
+    TabularInput,
+)
 
 from app.api.schemas.requests import PetProfileRequest
 from app.api.services.job_store import job_store
+from app.api.services.meta_service import load_breeds, load_colors, load_states
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +37,36 @@ _PET_TYPE: dict[str, int] = {"Dog": 1, "Cat": 2}
 _GENDER: dict[str, int] = {"Male": 1, "Female": 2, "Mixed": 3}
 _TRISTATE: dict[str, int] = {"Yes": 1, "No": 2, "Not Sure": 3}
 _HEALTH: dict[str, int] = {"Healthy": 1, "Minor Injury": 2, "Serious Injury": 3}
+
+
+def _resolve_labels(pet: PetProfileRequest) -> ListingLabels:
+    """Resolve reference IDs into names for the generative layer.
+
+    The agent layer cannot read the reference CSVs itself, so the names
+    travel with the request. Unspecified IDs (0) are left out rather than
+    resolved to a placeholder.
+    """
+    breeds = {b["id"]: b["name"] for b in load_breeds()}
+    colors = {c["id"]: c["name"] for c in load_colors()}
+    states = {s["id"]: s["name"] for s in load_states()}
+
+    breed_names: list[str] = []
+    for breed_id in (pet.breed1, pet.breed2):
+        name = breeds.get(breed_id) if breed_id else None
+        if name and name not in breed_names:
+            breed_names.append(name)
+
+    color_names: list[str] = []
+    for color_id in (pet.color1, pet.color2, pet.color3):
+        name = colors.get(color_id) if color_id else None
+        if name and name not in color_names:
+            color_names.append(name)
+
+    return ListingLabels(
+        breed=" / ".join(breed_names) or None,
+        colors=color_names,
+        state=states.get(pet.state) if pet.state else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +113,7 @@ def translate_request(
         tabular=tabular,
         description=pet.description,
         images=image_paths or [],
+        labels=_resolve_labels(pet),
     )
 
 

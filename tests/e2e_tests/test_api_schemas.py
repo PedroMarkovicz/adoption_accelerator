@@ -214,6 +214,30 @@ class TestTranslateRequest:
         req = translate_request(self._make_pet(name="Buddy"))
         assert req.tabular.name == "Buddy"
 
+    def test_labels_resolve_breed_color_and_state_names(self):
+        req = translate_request(
+            self._make_pet(breed1=265, color1=1, state=41326)
+        )
+        assert req.labels is not None
+        assert req.labels.breed == "Domestic Medium Hair"
+        assert req.labels.colors == ["Black"]
+        assert req.labels.state == "Selangor"
+
+    def test_labels_omit_unspecified_ids(self):
+        req = translate_request(
+            self._make_pet(color1=1, color2=0, color3=0, state=0)
+        )
+        assert req.labels.state is None
+        assert req.labels.colors == ["Black"]
+
+    def test_two_breeds_join_with_a_slash(self):
+        req = translate_request(self._make_pet(breed1=265, breed2=307))
+        assert req.labels.breed == "Domestic Medium Hair / Mixed Breed"
+
+    def test_repeated_breed_is_not_duplicated(self):
+        req = translate_request(self._make_pet(breed1=307, breed2=307))
+        assert req.labels.breed == "Mixed Breed"
+
 
 # ---------------------------------------------------------------------------
 # AdoptionReport / ReportStatusResponse tests against real e2e outputs.
