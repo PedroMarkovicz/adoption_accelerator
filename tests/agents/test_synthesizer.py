@@ -23,6 +23,7 @@ from adoption_accelerator.agents.nodes.synthesizer import (
     synthesizer_node,
 )
 from adoption_accelerator.contracts_test_helpers import make_request
+from adoption_accelerator.inference.contracts import ListingLabels
 
 
 def make_state(with_visual=True, observed_traits=None, appeal_hooks=None):
@@ -137,16 +138,15 @@ async def test_description_grounding_keeps_paraphrased_observed_trait():
 
 
 async def test_description_grounding_word_boundary_rejects_substring_bleed():
-    # observed_traits does not mention "spotted" at all. Naive substring
-    # matching (e.g. against something like "unspotted") could previously
-    # let an ungrounded "spotted" claim slip through; word-boundary
-    # matching must still reject it here.
+    # observed_traits contains "unspotted", which naive substring matching
+    # would treat as containing "spotted" and wrongly ground the claim.
+    # Word-boundary matching must still reject the claim here.
     output = SynthesisOutput(
         narrative="ok narrative for the report",
         headline="ok headline",
         optimized_description="Meet Rex, with a spotted coat.",
     )
-    state = make_state(observed_traits=["black and white coat"])
+    state = make_state(observed_traits=["unspotted white coat"])
     with patch(
         "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
         return_value=_model_returning(output),
@@ -352,6 +352,31 @@ async def test_a_common_word_matching_the_name_is_left_alone():
     assert "a happy dog" in updates["optimized_description"]
 
 
+async def test_accented_name_variant_is_repaired_in_narrative_and_headline():
+    # Finding 3: _normalize_name previously ran on the description only,
+    # so a stray "Bebé" (the model decorating the declared name "Bebe")
+    # still survived in the operator narrative and headline.
+    state = make_state()
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={"tabular": request.tabular.model_copy(update={"name": "Bebe"})}
+    )
+    output = SynthesisOutput(
+        narrative="Bebé is six months old and settles fast on a lap.",
+        headline="Meet Bebé, a calm companion.",
+        optimized_description="Bebe is friendly and loves attention.",
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert "Bebé" not in updates["narrative"]
+    assert "Bebé" not in updates["headline"]
+    assert updates["narrative"].startswith("Bebe is six months old")
+    assert "Meet Bebe" in updates["headline"]
+
+
 async def test_coat_synonym_no_longer_drops_a_truthful_description():
     # The analyst wrote "fur", the writer wrote "coat". Same trait.
     output = SynthesisOutput(
@@ -360,6 +385,111 @@ async def test_coat_synonym_no_longer_drops_a_truthful_description():
         optimized_description="Rex has a fluffy coat and he loves a warm lap.",
     )
     state = make_state(observed_traits=["long fluffy fur"])
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert updates["optimized_description"] is not None
+
+
+# Finding 1 regression coverage: declared PET FACTS (colors, breed, fur
+# length) must ground a truthful claim even when the photo analyst's
+# wording differs, or when there is no photo evidence at all (the
+# no-photo /predict path). The gate must still reject claims that only a
+# photo could support.
+
+async def test_declared_color_grounds_the_description_with_no_photos():
+    # No photos at all: observed_traits is empty, so only the declared
+    # PET FACTS can ground a color claim. This is the no-photo /predict
+    # path used in production, and previously it dropped ANY color claim.
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description=(
+            "Rex is six months old. His black and white coat is easy to "
+            "keep clean."
+        ),
+    )
+    state = make_state(with_visual=False)
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={"labels": ListingLabels(colors=["Black", "White"])}
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert updates["optimized_description"] is not None
+    assert "black and white" in updates["optimized_description"]
+
+
+async def test_declared_color_grounds_the_description_when_analyst_wording_differs():
+    # The analyst is never told the declared colors, so it describes what
+    # it saw in its own words. A truthful claim of the declared color must
+    # still ground even though the analyst's phrasing differs.
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description="Rex is friendly and his white coat is soft.",
+    )
+    state = make_state(observed_traits=["cream and white markings"])
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={"labels": ListingLabels(colors=["White"])}
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert updates["optimized_description"] is not None
+
+
+async def test_gate_still_rejects_traits_the_facts_cannot_support():
+    # "blue eyes" cannot come from PET FACTS (there is no eye-color field),
+    # so it must still require an actual photo observation. Regression
+    # guard against the Finding 1 fix turning the gate into a no-op.
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description="Meet Rex, with striking blue eyes.",
+    )
+    state = make_state(with_visual=False)
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={"labels": ListingLabels(colors=["Black", "White"])}
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert updates["optimized_description"] is None
+
+
+async def test_pronoun_mismatch_skipped_for_single_pet_of_unknown_sex():
+    # gender=3 on a single animal (quantity=1) decodes to sex "unknown"
+    # (not "male"/"female"), so _pronoun_mismatch must not fire regardless
+    # of which pronouns the copy uses.
+    state = make_state()
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={
+            "tabular": request.tabular.model_copy(
+                update={"gender": 3, "quantity": 1}
+            )
+        }
+    )
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description=(
+            "Rex is six months old and his black and white coat is easy "
+            "to keep clean."
+        ),
+    )
     with patch(
         "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
         return_value=_model_returning(output),

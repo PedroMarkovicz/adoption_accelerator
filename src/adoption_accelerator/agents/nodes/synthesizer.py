@@ -129,6 +129,13 @@ def _normalize_name(text: str, name: Optional[str]) -> str:
     turn every "happy" into a name. When the offending token was
     capitalized (e.g. it opened the sentence), the replacement keeps that
     capitalization even if the declared name is stored lowercase.
+
+    Silently inert for a declared name containing a space or hyphen (e.g.
+    "Miss Daisy"): the matching is done token-by-token (``\\w+``), so it
+    can never match a multi-token name as a whole and no replacement
+    happens. Confirmed harmless -- the text is left as the model wrote it,
+    never corrupted -- but such names simply do not benefit from this
+    repair.
     """
     if not name:
         return text
@@ -256,8 +263,8 @@ async def synthesizer_node(state: AgentState) -> dict:
         output: SynthesisOutput = result["parsed"]
         raw = result["raw"]
 
-        narrative = _strip_dashes(output.narrative)
-        headline = _strip_dashes(output.headline)
+        narrative = _normalize_name(_strip_dashes(output.narrative), facts.name)
+        headline = _normalize_name(_strip_dashes(output.headline), facts.name)
         description = output.optimized_description
 
         if description:
@@ -276,7 +283,16 @@ async def synthesizer_node(state: AgentState) -> dict:
         if description:
             visual = state.get("visual_evidence")
             observed = visual.observed_traits if visual is not None else []
-            offending = _violates_grounding(description, observed)
+            # The declared record is authoritative too, not just the photo
+            # analyst's wording: a truthful "<declared color> coat" must not
+            # be dropped just because the analyst never used that phrasing
+            # (or there were no photos at all). The fur_length entry exists
+            # only to supply the "coat" token, so a claim like "fluffy coat"
+            # still requires the analyst to have actually observed fluff.
+            grounding_corpus = observed + [
+                facts.colors or "", facts.breed or "", f"{facts.fur_length} coat",
+            ]
+            offending = _violates_grounding(description, grounding_corpus)
             if offending is not None:
                 logger.warning(
                     "Dropping ungrounded description (claims '%s')", offending

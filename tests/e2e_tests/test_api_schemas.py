@@ -238,6 +238,23 @@ class TestTranslateRequest:
         req = translate_request(self._make_pet(breed1=307, breed2=307))
         assert req.labels.breed == "Mixed Breed"
 
+    def test_labels_reach_the_synthesizer_pet_facts_block(self):
+        # Only type compatibility linked translate_request's labels to the
+        # synthesizer before this test existed. Pin that the resolved
+        # breed/color names actually flow into the PET FACTS block the
+        # writer prompt is built from, not just that the types line up.
+        from adoption_accelerator.agents.listing_facts import build_listing_facts
+
+        req = translate_request(
+            self._make_pet(breed1=265, color1=1, state=41326)
+        )
+        facts = build_listing_facts(req.tabular, req.labels)
+        block = facts.as_prompt_block()
+        assert facts.colors == "Black"
+        assert facts.breed == "Domestic Medium Hair"
+        assert "colors: Black" in block
+        assert "breed: Domestic Medium Hair" in block
+
 
 # ---------------------------------------------------------------------------
 # AdoptionReport / ReportStatusResponse tests against real e2e outputs.
