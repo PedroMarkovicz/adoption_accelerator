@@ -14,6 +14,10 @@ from typing import Optional
 from pydantic import BaseModel
 
 from adoption_accelerator.agents.contracts import NodeError, TraceEntry
+from adoption_accelerator.agents.listing_facts import (
+    ListingFacts,
+    build_listing_facts,
+)
 from adoption_accelerator.agents.llm.client import extract_usage, get_chat_model
 from adoption_accelerator.agents.llm.registry import resolve_role
 from adoption_accelerator.agents.state import AgentState
@@ -57,7 +61,7 @@ def _violates_grounding(description: str, observed_traits: list[str]) -> str | N
     return None
 
 
-def _build_user_prompt(state: AgentState) -> str:
+def _build_user_prompt(state: AgentState, facts: ListingFacts) -> str:
     ev = state["prediction_evidence"]
     lines = [
         "PREDICTION EVIDENCE:",
@@ -72,7 +76,16 @@ def _build_user_prompt(state: AgentState) -> str:
     if visual is not None:
         lines.append("VISUAL EVIDENCE:")
         lines.append(f"- overall appeal: {visual.overall_visual_appeal}/10")
-        lines.append(f"- observed traits: {', '.join(visual.observed_traits) or 'none'}")
+        lines.append(
+            "- confirmed physical traits (raw material for the ad, not a "
+            f"checklist to recite): {', '.join(visual.observed_traits) or 'none'}"
+        )
+        if visual.appeal_hooks:
+            lines.append(
+                "- adopter impression from the photos (let it shape tone and "
+                "word choice; never restate it as confirmed behavior): "
+                f"{', '.join(visual.appeal_hooks)}"
+            )
         lines.append(f"- strategy: {visual.photo_strategy_summary}")
         for flag in visual.consistency_flags:
             lines.append(f"- consistency flag: {flag}")
@@ -89,14 +102,9 @@ def _build_user_prompt(state: AgentState) -> str:
     else:
         lines.append("VALIDATED RECOMMENDATIONS: none")
 
+    lines.append(facts.as_prompt_block())
     request = state.get("request")
-    t = request.tabular
-    lines.append("LISTING DATA:")
-    lines.append(
-        f"- {'Dog' if t.type == 1 else 'Cat'}, age {t.age} months, "
-        f"gender code {t.gender}, fee {t.fee}, name: {t.name or '(none)'}"
-    )
-    lines.append(f"- original description: {request.description or '(none)'}")
+    lines.append(f"ORIGINAL DESCRIPTION: {request.description or '(none)'}")
     return "\n".join(lines)
 
 
@@ -138,9 +146,11 @@ async def synthesizer_node(state: AgentState) -> dict:
         model = get_chat_model("synthesizer").with_structured_output(
             SynthesisOutput, include_raw=True
         )
+        request = state.get("request")
+        facts = build_listing_facts(request.tabular, request.labels)
         result = await asyncio.wait_for(
             model.ainvoke([("system", system),
-                           ("user", _build_user_prompt(state))]),
+                           ("user", _build_user_prompt(state, facts))]),
             timeout=_TIMEOUT_SECONDS,
         )
         output: SynthesisOutput = result["parsed"]

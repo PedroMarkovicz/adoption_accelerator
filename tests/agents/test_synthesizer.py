@@ -13,14 +13,17 @@ from adoption_accelerator.agents.contracts import (
     ValidatedRecommendation,
     VisualEvidence,
 )
+from adoption_accelerator.agents.listing_facts import build_listing_facts
 from adoption_accelerator.agents.nodes.synthesizer import (
+    _PROMPTS_DIR,
     SynthesisOutput,
+    _build_user_prompt,
     synthesizer_node,
 )
 from adoption_accelerator.contracts_test_helpers import make_request
 
 
-def make_state(with_visual=True, observed_traits=None):
+def make_state(with_visual=True, observed_traits=None, appeal_hooks=None):
     prediction_evidence = PredictionEvidence(
         source="data_analyst", confidence="high", generated_by="gpt-5-nano",
         predicted_class=3, prediction_label="Adopted within 1-3 months",
@@ -35,6 +38,7 @@ def make_state(with_visual=True, observed_traits=None):
             source="visual_analyst", confidence="medium",
             generated_by="gpt-5-mini", overall_visual_appeal=7,
             observed_traits=observed_traits or ["black and white coat"],
+            appeal_hooks=appeal_hooks or [],
             photo_strategy_summary="Lead with photo 0.",
         )
     recs = RecommendationEvidence(
@@ -162,3 +166,49 @@ async def test_llm_failure_falls_back_to_template():
     assert "1-3 months" in updates["narrative"]
     assert updates["optimized_description"] is None
     assert any(e.error_type == "llm_failure" for e in updates["errors"])
+
+
+def _prompt_for(state) -> str:
+    request = state["request"]
+    facts = build_listing_facts(request.tabular, request.labels)
+    return _build_user_prompt(state, facts)
+
+
+def test_prompt_states_sex_and_pronouns_instead_of_a_code():
+    prompt = _prompt_for(make_state())
+    assert "sex: male" in prompt
+    assert "he/him/his" in prompt
+    assert "gender code" not in prompt
+
+
+def test_prompt_carries_the_decoded_listing_attributes():
+    prompt = _prompt_for(make_state())
+    # make_request builds a 6-month-old male dog, medium size, short fur,
+    # healthy, vaccinated, dewormed, not sterilized, no fee
+    assert "6 months old" in prompt
+    assert "size when grown: medium" in prompt
+    assert "coat length: short" in prompt
+    assert "health: healthy" in prompt
+    assert "vaccinated: yes" in prompt
+    assert "no adoption fee" in prompt
+
+
+def test_prompt_marks_appeal_hooks_as_impression():
+    state = make_state(appeal_hooks=["looks alert and curious rather than shy"])
+    prompt = _prompt_for(state)
+    assert "looks alert and curious rather than shy" in prompt
+    assert "impression" in prompt.lower()
+
+
+def test_prompt_omits_visual_lines_when_there_are_no_photos():
+    prompt = _prompt_for(make_state(with_visual=False))
+    assert "no photos were provided" in prompt
+
+
+def test_system_prompt_targets_the_adopter_and_bans_photo_narration():
+    text = (_PROMPTS_DIR / "synthesizer_system.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "NEVER DESCRIBE THE PHOTOGRAPH" in text
+    assert "Em dashes and en dashes" in text
+    assert "pronouns from PET FACTS" in text

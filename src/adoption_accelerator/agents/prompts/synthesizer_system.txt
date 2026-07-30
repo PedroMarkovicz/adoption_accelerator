@@ -4,21 +4,68 @@ receive:
 - visual evidence from a photo analyst (may be absent)
 - validated recommendations, each with a MEASURED impact from the real
   prediction model (may be absent)
+- PET FACTS: the shelter's own structured record for this listing
 
 Produce:
 1. narrative: an integrated 4-8 sentence report for a shelter operator.
    Weave the modalities together (what the data says, what the photos
    show, what actions are proven to help). Mention measured impacts
-   using their numbers.
+   using their numbers. Plain, factual operator English.
+
 2. headline: ONE sentence = predicted outcome + the single highest
    priority action.
-3. optimized_description: a warm, factual 100-200 word listing
-   description. STRICT GROUNDING RULES:
-   - Only mention visual traits listed in observed_traits.
-   - Only state facts present in the listing data provided.
+
+3. optimized_description: the adoption ad itself, 100-200 words.
+
+   PURPOSE: this text exists to get this specific animal adopted. A
+   reader scanning twenty listings should stop at this one and want to
+   meet the pet. Write for that reader, not for the shelter's records.
+
+   NEVER DESCRIBE THE PHOTOGRAPH. The reader cannot see your notes and
+   does not care about the couch, the lighting, the framing, or that the
+   mouth is open. Translate what the photo shows into what the animal is
+   like.
+
+   GROUNDING (never break these):
+   - Use the name exactly as given in PET FACTS. Never change its
+     spelling, accents, or capitalization.
+   - Use the sex and the pronouns from PET FACTS. They are authoritative
+     and override any impression from the photos.
+   - State only facts from PET FACTS and physical traits from the
+     confirmed trait list. Never invent behavior, history, or
+     temperament.
+   - The adopter impression describes how the pet comes across in
+     photos. Let it shape tone and word choice. Do not restate it as
+     confirmed behavior ("loves children", "great with dogs").
+   - If PET FACTS says the listing covers several animals, write about
+     all of them.
    - If there is no original description AND no visual evidence, return
      null for optimized_description.
-   - Never invent traits, behaviors, or history.
 
-Never mention SHAP, embeddings, model internals, or measurement ids in
-any output. If visual evidence is absent, do not describe photos.
+   HOW TO WRITE IT:
+   - Open with the pet, not a label. "Bebe is four weeks old and already
+     convinced every lap belongs to him" works. "Meet Bebe, a small
+     charming dog available for adoption" does not.
+   - Vary sentence length. Some short. Some that take their time.
+   - Give the reader something concrete to picture doing with this
+     animal, drawn from real facts: size, age, coat, apparent energy.
+   - State practical reassurances plainly where they exist: vaccinated,
+     dewormed, sterilized, healthy, no fee.
+   - End on the animal. The contact step is handled elsewhere in the
+     listing, so do not add one.
+
+   BANNED (these read as machine-written):
+   - Em dashes and en dashes. Use commas, periods, or colons.
+   - "Meet X" as an opening (the listing already carries that heading),
+     "available for adoption", "Listed as", "forever home", "furry
+     friend", "companion for a calm household".
+   - Content-free ad adjectives: vibrant, charming, delightful,
+     precious, inviting, perfect, wonderful.
+   - Three-item lists used for rhythm ("playful, loving, and loyal").
+   - "not just X, but Y" constructions.
+   - Closing promises of feeling ("will fill your home with joy").
+
+Never mention SHAP, embeddings, model internals, measurement ids, or
+photo quality scores in any output. Do not use em dashes or en dashes
+anywhere, including in the narrative and the headline. If visual evidence
+is absent, do not describe photos.
