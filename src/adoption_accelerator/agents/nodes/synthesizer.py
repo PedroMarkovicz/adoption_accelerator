@@ -7,6 +7,7 @@ import asyncio
 import logging
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -28,18 +29,41 @@ _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _TIMEOUT_SECONDS = 20.0
 
 # Visual-trait phrases that must be grounded in observed_traits when a
-# description mentions them. Deliberately narrow: colors/eyes/coat.
+# description mentions them. Deliberately narrow: every added pattern is
+# another chance to reject honest copy.
 _VISUAL_TRAIT_PATTERNS = [
     r"blue eyes", r"green eyes", r"amber eyes",
     r"black and white", r"brown coat", r"white coat", r"black coat",
     r"golden coat", r"spotted", r"striped", r"fluffy coat",
+    r"curly coat", r"wavy coat", r"tabby", r"brindle",
 ]
+
+# Words the analyst and the writer use interchangeably. Without this, a
+# truthful "fluffy coat" is rejected because the analyst wrote "fluffy fur".
+_EQUIVALENT_WORDS: dict[str, set[str]] = {
+    "coat": {"coat", "fur", "hair"},
+    "fur": {"coat", "fur", "hair"},
+    "hair": {"coat", "fur", "hair"},
+    "eyes": {"eyes", "eye"},
+}
+
+_DASH_PATTERN = re.compile(r"\s*[—–]\s*")
+_MALE_PRONOUNS = re.compile(r"\b(?:he|him|his|himself)\b", re.IGNORECASE)
+_FEMALE_PRONOUNS = re.compile(r"\b(?:she|her|hers|herself)\b", re.IGNORECASE)
 
 
 class SynthesisOutput(BaseModel):
     narrative: str
     headline: str
     optimized_description: Optional[str] = None
+
+
+def _word_present(word: str, observed: str) -> bool:
+    """Is this trait word (or an accepted equivalent) in observed_traits?"""
+    for variant in _EQUIVALENT_WORDS.get(word, {word}):
+        if re.search(rf"\b{re.escape(variant)}\b", observed):
+            return True
+    return False
 
 
 def _violates_grounding(description: str, observed_traits: list[str]) -> str | None:
@@ -55,10 +79,72 @@ def _violates_grounding(description: str, observed_traits: list[str]) -> str | N
         # Grounded if every significant word of the trait appears (word-boundary)
         # in observed_traits. "and" is not significant.
         words = [w for w in pattern.split() if w != "and"]
-        if all(re.search(rf"\b{re.escape(w)}\b", observed) for w in words):
+        if all(_word_present(w, observed) for w in words):
             continue  # grounded -> not a violation
         return pattern
     return None
+
+
+def _strip_dashes(text: str) -> str:
+    """Remove em and en dashes, the most reliable tell of machine-written
+    copy. A dash between digits is a range, so it becomes ' to '; anywhere
+    else it becomes a comma."""
+
+    def replace(match: re.Match[str]) -> str:
+        source = match.string
+        previous = source[: match.start()].rstrip()[-1:]
+        following = source[match.end() :].lstrip()[:1]
+        if previous.isdigit() and following.isdigit():
+            return " to "
+        return ", "
+
+    cleaned = _DASH_PATTERN.sub(replace, text)
+    return re.sub(r"\s{2,}", " ", cleaned).strip()
+
+
+def _strip_accents(value: str) -> str:
+    return "".join(
+        ch
+        for ch in unicodedata.normalize("NFKD", value)
+        if not unicodedata.combining(ch)
+    )
+
+
+def _normalize_name(text: str, name: Optional[str]) -> str:
+    """Rewrite accent variants of the pet's name to the declared spelling.
+
+    The model has decorated names before ("Bebe" became "Bebé"), which
+    contradicts the listing heading. Tokens that differ from the name only
+    in capitalization are left alone, so a pet called "Happy" does not
+    turn every "happy" into a name.
+    """
+    if not name:
+        return text
+    target = _strip_accents(name).casefold()
+    if not target:
+        return text
+
+    def replace(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if token.casefold() == name.casefold():
+            return token
+        if _strip_accents(token).casefold() == target:
+            return name
+        return token
+
+    return re.sub(r"\w+", replace, text)
+
+
+def _pronoun_mismatch(description: str, facts: ListingFacts) -> bool:
+    """True when the copy contradicts the shelter's own record on sex.
+
+    Only meaningful for one animal of known sex: a group listing may
+    legitimately use both sets while describing individual animals.
+    """
+    if facts.is_group or facts.sex not in ("male", "female"):
+        return False
+    wrong = _FEMALE_PRONOUNS if facts.sex == "male" else _MALE_PRONOUNS
+    return bool(wrong.search(description))
 
 
 def _build_user_prompt(state: AgentState, facts: ListingFacts) -> str:
@@ -156,11 +242,23 @@ async def synthesizer_node(state: AgentState) -> dict:
         output: SynthesisOutput = result["parsed"]
         raw = result["raw"]
 
-        narrative = output.narrative
-        headline = output.headline
+        narrative = _strip_dashes(output.narrative)
+        headline = _strip_dashes(output.headline)
         description = output.optimized_description
 
-        # Grounding gate for the description
+        if description:
+            # Repair first, so the rejection checks see the corrected text.
+            description = _strip_dashes(description)
+            description = _normalize_name(description, facts.name)
+
+            if _pronoun_mismatch(description, facts):
+                logger.warning(
+                    "Dropping description: pronouns contradict declared sex "
+                    "'%s'", facts.sex,
+                )
+                meta["description_dropped"] = "pronoun_mismatch"
+                description = None
+
         if description:
             visual = state.get("visual_evidence")
             observed = visual.observed_traits if visual is not None else []

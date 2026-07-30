@@ -212,3 +212,155 @@ def test_system_prompt_targets_the_adopter_and_bans_photo_narration():
     assert "NEVER DESCRIBE THE PHOTOGRAPH" in text
     assert "Em dashes and en dashes" in text
     assert "pronouns from PET FACTS" in text
+
+
+async def test_female_pronouns_for_a_male_pet_are_dropped():
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description=(
+            "Rex is six months old and her black and white coat is easy "
+            "to keep clean."
+        ),
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(make_state())
+    assert updates["optimized_description"] is None
+    assert updates["trace"][0].metadata["description_dropped"] == (
+        "pronoun_mismatch"
+    )
+
+
+async def test_correct_pronouns_survive():
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description=(
+            "Rex is six months old and his black and white coat is easy "
+            "to keep clean."
+        ),
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(make_state())
+    assert updates["optimized_description"] is not None
+
+
+async def test_group_listing_tolerates_mixed_pronouns():
+    state = make_state()
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={
+            "tabular": request.tabular.model_copy(
+                update={"quantity": 3, "gender": 3}
+            )
+        }
+    )
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description=(
+            "Three puppies are looking for homes. He is the bold one and "
+            "she waits her turn."
+        ),
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert updates["optimized_description"] is not None
+
+
+async def test_em_dash_becomes_a_comma():
+    output = SynthesisOutput(
+        narrative="Fine narrative for the operator report.",
+        headline="Fine headline",
+        optimized_description="Rex is calm — he settles fast on a lap.",
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(make_state())
+    description = updates["optimized_description"]
+    assert "—" not in description
+    assert "Rex is calm, he settles fast on a lap." == description
+
+
+async def test_dash_between_numbers_becomes_the_word_to():
+    output = SynthesisOutput(
+        narrative="The model predicts 1–3 months to adoption.",
+        headline="Fine headline",
+        optimized_description=None,
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(make_state())
+    assert "1 to 3 months" in updates["narrative"]
+
+
+async def test_accented_name_variant_is_repaired():
+    state = make_state()
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={"tabular": request.tabular.model_copy(update={"name": "Bebe"})}
+    )
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description=(
+            "Bebé is six months old and he already owns every warm lap."
+        ),
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    description = updates["optimized_description"]
+    assert "Bebé" not in description
+    assert description.startswith("Bebe is six months old")
+
+
+async def test_a_common_word_matching_the_name_is_left_alone():
+    # A pet named "Happy" must not turn every "happy" into a name.
+    state = make_state()
+    request = state["request"]
+    state["request"] = request.model_copy(
+        update={"tabular": request.tabular.model_copy(update={"name": "Happy"})}
+    )
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description="Happy is a happy dog and he settles fast.",
+    )
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert "a happy dog" in updates["optimized_description"]
+
+
+async def test_coat_synonym_no_longer_drops_a_truthful_description():
+    # The analyst wrote "fur", the writer wrote "coat". Same trait.
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description="Rex has a fluffy coat and he loves a warm lap.",
+    )
+    state = make_state(observed_traits=["long fluffy fur"])
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ):
+        updates = await synthesizer_node(state)
+    assert updates["optimized_description"] is not None
