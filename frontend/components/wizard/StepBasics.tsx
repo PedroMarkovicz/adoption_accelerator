@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/Slider";
 export function StepBasics() {
   const { control, register, watch, formState: { errors } } = useFormContext<PetProfileFormValues>();
   const age = watch("age_months");
+  const quantity = watch("quantity");
   return (
     <div className="flex flex-col gap-6">
       <Field label="Is it a dog or a cat?">
@@ -25,7 +26,7 @@ export function StepBasics() {
         <Controller control={control} name="gender"
           render={({ field }) => <RadioPills value={field.value} onChange={field.onChange} options={["Male", "Female", "Mixed"]} ariaLabel="Gender" />} />
       </Field>
-      <Field label="How many pets in this listing?" error={errors.quantity?.message}>
+      <Field label={`How many pets in this listing? ${quantity} pet${quantity === 1 ? "" : "s"}`} error={errors.quantity?.message}>
         <Controller control={control} name="quantity"
           render={({ field }) => <Slider min={1} max={20} value={field.value} onValueChange={field.onChange} ariaLabel="Quantity" />} />
       </Field>
