@@ -47,7 +47,7 @@ _EQUIVALENT_WORDS: dict[str, set[str]] = {
     "eyes": {"eyes", "eye"},
 }
 
-_DASH_PATTERN = re.compile(r"\s*[—–]\s*")
+_DASH_PATTERN = re.compile(r"\s*[—–]+\s*")
 _MALE_PRONOUNS = re.compile(r"\b(?:he|him|his|himself)\b", re.IGNORECASE)
 _FEMALE_PRONOUNS = re.compile(r"\b(?:she|her|hers|herself)\b", re.IGNORECASE)
 
@@ -87,19 +87,29 @@ def _violates_grounding(description: str, observed_traits: list[str]) -> str | N
 
 def _strip_dashes(text: str) -> str:
     """Remove em and en dashes, the most reliable tell of machine-written
-    copy. A dash between digits is a range, so it becomes ' to '; anywhere
-    else it becomes a comma."""
+    copy. A run of one or more dashes between digits is a range, so it
+    becomes ' to '. Elsewhere it becomes a comma, unless punctuation
+    already precedes it (then a single space suffices) or there is no
+    text on one side of it (then nothing, rather than stray punctuation
+    at a string boundary)."""
 
     def replace(match: re.Match[str]) -> str:
-        source = match.string
-        previous = source[: match.start()].rstrip()[-1:]
-        following = source[match.end() :].lstrip()[:1]
-        if previous.isdigit() and following.isdigit():
+        previous = match.string[: match.start()].rstrip()
+        following = match.string[match.end() :].lstrip()
+        prev_char = previous[-1:]
+        next_char = following[:1]
+        if prev_char.isdigit() and next_char.isdigit():
             return " to "
+        if not prev_char or not next_char:
+            return ""
+        if prev_char in ",;:.!?":
+            return " "
         return ", "
 
     cleaned = _DASH_PATTERN.sub(replace, text)
-    return re.sub(r"\s{2,}", " ", cleaned).strip()
+    # Collapse only runs of spaces/tabs; a paragraph break (newlines) must
+    # survive, since narrative/headline copy can be multi-paragraph.
+    return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
 
 
 def _strip_accents(value: str) -> str:
@@ -116,7 +126,9 @@ def _normalize_name(text: str, name: Optional[str]) -> str:
     The model has decorated names before ("Bebe" became "Bebé"), which
     contradicts the listing heading. Tokens that differ from the name only
     in capitalization are left alone, so a pet called "Happy" does not
-    turn every "happy" into a name.
+    turn every "happy" into a name. When the offending token was
+    capitalized (e.g. it opened the sentence), the replacement keeps that
+    capitalization even if the declared name is stored lowercase.
     """
     if not name:
         return text
@@ -129,6 +141,8 @@ def _normalize_name(text: str, name: Optional[str]) -> str:
         if token.casefold() == name.casefold():
             return token
         if _strip_accents(token).casefold() == target:
+            if token[:1].isupper():
+                return name[:1].upper() + name[1:]
             return name
         return token
 

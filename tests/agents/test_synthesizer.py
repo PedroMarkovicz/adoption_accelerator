@@ -18,6 +18,8 @@ from adoption_accelerator.agents.nodes.synthesizer import (
     _PROMPTS_DIR,
     SynthesisOutput,
     _build_user_prompt,
+    _normalize_name,
+    _strip_dashes,
     synthesizer_node,
 )
 from adoption_accelerator.contracts_test_helpers import make_request
@@ -364,3 +366,42 @@ async def test_coat_synonym_no_longer_drops_a_truthful_description():
     ):
         updates = await synthesizer_node(state)
     assert updates["optimized_description"] is not None
+
+
+# Fix round 1 regressions: _strip_dashes and _normalize_name edge cases
+# found in review, exercised directly against the private helpers since
+# routing each through the full node would be needlessly expensive.
+
+def test_strip_dashes_does_not_double_existing_punctuation():
+    assert _strip_dashes("calm, — he settles") == "calm, he settles"
+
+
+def test_strip_dashes_preserves_paragraph_breaks():
+    text = "Paragraph one.\n\nParagraph two."
+    assert _strip_dashes(text) == text
+
+
+def test_strip_dashes_at_start_of_string_leaves_no_stray_comma():
+    assert _strip_dashes("— starts with a dash") == "starts with a dash"
+
+
+def test_strip_dashes_at_end_of_string_leaves_no_stray_comma():
+    assert _strip_dashes("ends with a dash —") == "ends with a dash"
+
+
+def test_strip_dashes_collapses_consecutive_dashes():
+    assert _strip_dashes("here —— wow") == "here, wow"
+
+
+def test_strip_dashes_still_makes_a_range_from_digits():
+    assert _strip_dashes("1–3 months") == "1 to 3 months"
+
+
+def test_normalize_name_capitalizes_when_the_token_was_capitalized():
+    assert _normalize_name("Bebé is six months old", "bebe") == (
+        "Bebe is six months old"
+    )
+
+
+def test_normalize_name_keeps_declared_case_when_token_was_lowercase():
+    assert _normalize_name("bebé sleeps", "bebe") == "bebe sleeps"
