@@ -301,11 +301,15 @@ Three gradient-boosted decision tree libraries are tuned with Tree-structured Pa
 | **XGBoost** (Chen & Guestrin, 2016) | 30 | `learning_rate`, `max_depth`, `min_child_weight`, `subsample`, `colsample_bytree`, `gamma`, `reg_alpha`, `reg_lambda` |
 | **CatBoost** (Prokhorenkova et al., 2018) | 30 | `learning_rate`, `depth`, `l2_leaf_reg`, `min_data_in_leaf`, `subsample`, `colsample_bylevel`, `random_strength` |
 
-The top three configurations per family (nine models total) are re-checked with a `cross_validate_model` pass. Any model whose train-to-validation gap runs over 0.05 is flagged as overfit and dropped.
+The top three configurations per family (nine models total) are re-checked with a `cross_validate_model` pass, which records a train-to-validation QWK gap for each one as an overfitting diagnostic.
+
+> **On that gap:** it is reported, not enforced. Every tuned model here memorizes the training folds — LightGBM reaches a train QWK of ~0.999 against ~0.43 on validation, XGBoost ~0.96, CatBoost ~0.83. That is ordinary for gradient-boosted trees on this many features, and it is why model selection is driven by the cross-validated score rather than by the gap.
 
 ### 🎯 Final model: soft voting ensemble
 
-The production model averages the calibrated probabilities of the tuned LightGBM, XGBoost, and CatBoost. Each library handles the data a little differently (CatBoost is strong on high-cardinality categoricals, the three use different regularization), so averaging their probabilities is steadier than any single model across the ordinal target.
+The production model averages the predicted probabilities of the tuned LightGBM, XGBoost, and CatBoost. Each library handles the data a little differently (CatBoost is strong on high-cardinality categoricals, the three use different regularization), so averaging their probabilities is steadier than any single model across the ordinal target.
+
+> **Why the ensemble, when a single model scores higher.** `xgboost_top3` reaches 0.4979 QWK and `lightgbm_top3` 0.4966, against the ensemble's 0.4933. That gap is 0.0046 — less than half of one fold-level standard deviation. `xgboost_top3` swings by ±0.0104 across folds and its worst fold (0.4832) falls below the ensemble's mean, so its lead is inside the noise. The ensemble is shipped for the lower variance, not the higher mean.
 
 ```mermaid
 graph TB
@@ -335,7 +339,9 @@ graph TB
 | Baseline QWK (LightGBM default) | 0.4488 |
 | **Improvement over baseline** | **+0.0445 (+9.9%)** |
 
-**Competitive standing:** the threshold-optimized ensemble reaches a Quadratic Weighted Kappa of **0.4933**. The first-place private-leaderboard score in the official [Kaggle PetFinder Adoption Prediction competition](https://www.kaggle.com/competitions/petfinder-adoption-prediction/leaderboard) was **0.45338**, so this pipeline lands in the range of the top competition entries.
+**Competitive standing:** the threshold-optimized ensemble reaches a Quadratic Weighted Kappa of **0.4933**. The first-place private-leaderboard score in the official [Kaggle PetFinder Adoption Prediction competition](https://www.kaggle.com/competitions/petfinder-adoption-prediction/leaderboard) was **0.45338**, which puts this pipeline in the range of the top competition entries.
+
+> **Read that comparison carefully.** The two numbers are not measured the same way. 0.4933 is a 5-fold cross-validated score with the decision thresholds fitted on the same validation folds it is reported on, which biases it upward. The Kaggle figure is a single held-out private test set. The comparison is a sanity check on the order of magnitude, not a like-for-like ranking.
 
 ### ⚙️ Threshold optimization
 
@@ -365,6 +371,8 @@ AdoptionSpeed is ordinal and QWK punishes far-off misclassifications, so argmax 
 > **Notebook:** `13_interpretability_diagnostics.ipynb`
 
 Interpretability is part of the design, not an afterthought. It uses SHAP (Lundberg et al., 2020) with the fast `TreeExplainer` variant for tree ensembles, which gives locally accurate, game-theoretic feature attributions for each prediction.
+
+> **What the explainer is fitted on.** SHAP has no native support for the soft-voting wrapper, so `TreeExplainer` is fitted on the LightGBM base learner (`interpretability/explainer.py`). The attributions describe a representative member of the ensemble rather than the averaged model that produces the shipped probability.
 
 | Level | Scope | Output |
 |-------|-------|--------|
@@ -431,7 +439,7 @@ The agents run on top of the deterministic result. Each one has a narrow job:
 
 ### 🌉 What keeps the generative layer honest
 
-- **Measured, not estimated.** When the recommender says "add a second clear photo moves this up a class," that number comes from re-running the actual ensemble with the change applied, not from the LLM's guess.
+- **Measured, not estimated.** When the recommender says "add a second clear photo moves this up a class," that number comes from re-running the actual ensemble with the change applied, not from the LLM's guess. The summary shown to the user is derived from the measured probability shift, so a change that moves nothing is reported as no measurable change, and one that moves the wrong way is reported as moving the wrong way.
 - **Grounded copy.** The synthesizer can only mention visual traits the vision model actually reported. If a trait was not observed, the rewritten description drops it.
 - **Deterministic core always present.** The prediction and SHAP always ship. If the vision model or an LLM call fails, the report still renders and states plainly what was unavailable, rather than inventing content.
 - **Per-role models, set in YAML.** Which model runs each node, and its reasoning effort and timeout, lives in `configs/agents/`. Swapping a model is a config edit.
