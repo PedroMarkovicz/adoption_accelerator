@@ -863,6 +863,8 @@ export interface components {
             best_photo_index?: number | null;
             /** Observed Traits */
             observed_traits?: string[];
+            /** Appeal Hooks */
+            appeal_hooks?: string[];
             /** Consistency Flags */
             consistency_flags?: string[];
             /**

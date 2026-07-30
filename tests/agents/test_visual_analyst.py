@@ -10,11 +10,13 @@ from langchain_core.messages import AIMessage
 
 from adoption_accelerator.agents.nodes.visual_analyst import (
     MAX_IMAGES,
+    _PROMPTS_DIR,
     VisualAnalysisOutput,
     load_images_base64,
     visual_analyst_node,
 )
 from adoption_accelerator.contracts_test_helpers import make_request  # see step 3
+from adoption_accelerator.inference.contracts import ListingLabels
 
 # 1x1 transparent PNG
 _PNG_BYTES = base64.b64decode(
@@ -95,3 +97,98 @@ async def test_successful_analysis_wraps_output(png_file):
     assert ev.source == "visual_analyst"
     assert ev.observed_traits == ["black and white coat"]
     assert updates["trace"][0].metadata["llm_usage"]["model_key"] == "gpt-5-mini"
+
+
+def _fake_model_returning(output):
+    fake_structured = AsyncMock()
+    fake_structured.ainvoke.return_value = {
+        "parsed": output,
+        "raw": AIMessage(
+            content="",
+            usage_metadata={
+                "input_tokens": 300,
+                "output_tokens": 80,
+                "total_tokens": 380,
+            },
+        ),
+        "parsing_error": None,
+    }
+    model = SimpleNamespace(
+        with_structured_output=lambda schema, **kw: fake_structured
+    )
+    return model, fake_structured
+
+
+async def test_pet_context_uses_the_breed_name_not_the_id(png_file):
+    output = VisualAnalysisOutput(
+        photos=[], overall_visual_appeal=6, best_photo_index=0,
+        observed_traits=[], consistency_flags=[],
+        photo_strategy_summary="ok",
+    )
+    model, fake_structured = _fake_model_returning(output)
+    request = make_request(images=[png_file]).model_copy(
+        update={"labels": ListingLabels(breed="Mixed Breed")}
+    )
+    state = {"request": request, "timestamp": "t"}
+    with patch(
+        "adoption_accelerator.agents.nodes.visual_analyst.get_chat_model",
+        return_value=model,
+    ):
+        await visual_analyst_node(state)
+    messages = fake_structured.ainvoke.await_args.args[0]
+    context_text = messages[1][1][0]["text"]
+    assert "Declared breed: Mixed Breed" in context_text
+    assert "breed id" not in context_text
+
+
+async def test_pet_context_says_not_specified_without_labels(png_file):
+    output = VisualAnalysisOutput(
+        photos=[], overall_visual_appeal=6, best_photo_index=0,
+        observed_traits=[], consistency_flags=[],
+        photo_strategy_summary="ok",
+    )
+    model, fake_structured = _fake_model_returning(output)
+    state = {"request": make_request(images=[png_file]), "timestamp": "t"}
+    with patch(
+        "adoption_accelerator.agents.nodes.visual_analyst.get_chat_model",
+        return_value=model,
+    ):
+        await visual_analyst_node(state)
+    messages = fake_structured.ainvoke.await_args.args[0]
+    context_text = messages[1][1][0]["text"]
+    assert "Declared breed: not specified" in context_text
+
+
+async def test_appeal_hooks_round_trip_into_evidence(png_file):
+    output = VisualAnalysisOutput(
+        photos=[], overall_visual_appeal=7, best_photo_index=0,
+        observed_traits=["white fluffy coat"],
+        appeal_hooks=["looks alert and curious rather than shy"],
+        consistency_flags=[], photo_strategy_summary="Lead with photo 0.",
+    )
+    model, _ = _fake_model_returning(output)
+    state = {"request": make_request(images=[png_file]), "timestamp": "t"}
+    with patch(
+        "adoption_accelerator.agents.nodes.visual_analyst.get_chat_model",
+        return_value=model,
+    ):
+        updates = await visual_analyst_node(state)
+    assert updates["visual_evidence"].appeal_hooks == [
+        "looks alert and curious rather than shy"
+    ]
+
+
+def test_appeal_hooks_defaults_to_empty():
+    output = VisualAnalysisOutput(
+        photos=[], overall_visual_appeal=5, best_photo_index=None,
+        observed_traits=[], consistency_flags=[], photo_strategy_summary="",
+    )
+    assert output.appeal_hooks == []
+
+
+def test_system_prompt_forbids_assigning_a_sex():
+    text = (_PROMPTS_DIR / "visual_analyst_system.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "NEVER state or imply the animal's sex" in text
+    assert "appeal_hooks" in text

@@ -44,6 +44,7 @@ class VisualAnalysisOutput(BaseModel):
     overall_visual_appeal: int = Field(..., ge=1, le=10)
     best_photo_index: Optional[int] = None
     observed_traits: list[str] = Field(default_factory=list)
+    appeal_hooks: list[str] = Field(default_factory=list)
     consistency_flags: list[str] = Field(default_factory=list)
     photo_strategy_summary: str = ""
 
@@ -82,9 +83,11 @@ async def visual_analyst_node(state: AgentState) -> dict:
 
     try:
         t = request.tabular
+        breed = request.labels.breed if request.labels else None
         pet_context = (
             f"Declared pet type: {'Dog' if t.type == 1 else 'Cat'}. "
-            f"Declared breed id: {t.breed1}. Declared age: {t.age} months. "
+            f"Declared breed: {breed or 'not specified'}. "
+            f"Declared age: {t.age} months. "
             f"{len(images)} photo(s) attached."
         )
         content: list[dict] = [{"type": "text", "text": pet_context}]
