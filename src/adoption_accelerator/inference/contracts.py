@@ -36,6 +36,20 @@ class TabularInput(BaseModel):
     video_amt: int = Field(0, description="Number of videos")
 
 
+class ListingLabels(BaseModel):
+    """Human-readable names for the coded reference IDs on ``TabularInput``.
+
+    The agent layer cannot resolve these itself: the reference CSVs live
+    under ``app/api/assets`` and ``data/`` is excluded from the container
+    image. The API layer, which owns ``meta_service``, injects them.
+    Optional throughout, so CLI and test callers may omit them.
+    """
+
+    breed: Optional[str] = None
+    colors: list[str] = Field(default_factory=list)
+    state: Optional[str] = None
+
+
 class PredictionOptions(BaseModel):
     """Options for prediction output."""
 
@@ -49,6 +63,9 @@ class PredictionRequest(BaseModel):
     tabular: TabularInput
     description: str = ""
     images: list[str] = Field(default_factory=list, description="Image file paths")
+    labels: Optional[ListingLabels] = Field(
+        None, description="Resolved reference names, injected by the API layer"
+    )
     options: PredictionOptions = Field(default_factory=PredictionOptions)
 
 
