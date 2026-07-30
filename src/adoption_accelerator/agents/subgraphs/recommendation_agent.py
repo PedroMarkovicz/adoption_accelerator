@@ -65,11 +65,46 @@ class FinalRecommendations(BaseModel):
     rejected_hypotheses: list[str] = Field(default_factory=list)
 
 
-def _speedup_text(class_before: int, class_after: int) -> str:
+# Expected-class-value moves smaller than this are treated as noise rather
+# than as a real effect. Matches the scale of the ordinal target (0-4).
+_SPEEDUP_EPSILON = 1e-3
+
+
+def _expected_class_delta(probability_shift: dict[int, float]) -> float:
+    """Change in expected class value implied by a probability shift.
+
+    Classes are ordinal and ascending in slowness (0 = same-day,
+    4 = not adopted), so a negative delta means probability mass moved
+    toward faster adoption.
+    """
+    return sum(int(k) * float(v) for k, v in probability_shift.items())
+
+
+def _speedup_text(
+    class_before: int,
+    class_after: int,
+    probability_shift: dict[int, float],
+) -> str:
+    """Describe a measured impact, using only what the measurement shows.
+
+    The predicted class alone is not enough: a change can leave the class
+    untouched while moving probability mass the wrong way, or move nothing
+    at all. Both cases were previously reported as improvements.
+    """
     if class_after < class_before:
         return (f"moves the prediction from '{_CLASS_LABELS[class_before]}' "
                 f"to '{_CLASS_LABELS[class_after]}'")
-    return "improves class probabilities without changing the predicted class"
+    if class_after > class_before:
+        return (f"moves the prediction from '{_CLASS_LABELS[class_before]}' "
+                f"to '{_CLASS_LABELS[class_after]}', which is slower")
+
+    delta = _expected_class_delta(probability_shift)
+    if delta < -_SPEEDUP_EPSILON:
+        return "improves class probabilities without changing the predicted class"
+    if delta > _SPEEDUP_EPSILON:
+        return ("shifts probability toward slower adoption without changing "
+                "the predicted class")
+    return "no measurable change in the predicted probabilities"
 
 
 def _build_context(state: AgentState) -> str:
@@ -149,6 +184,9 @@ def _finalize_items(
                 f"'{item.measurement_id}'"
             )
             continue
+        shift = {
+            int(k): v for k, v in measurement["probability_shift"].items()
+        }
         validated.append(ValidatedRecommendation(
             action=item.action,
             feature=item.feature,
@@ -157,11 +195,11 @@ def _finalize_items(
             measured_impact=MeasuredImpact(
                 class_before=measurement["class_before"],
                 class_after=measurement["class_after"],
-                probability_shift={
-                    int(k): v for k, v in measurement["probability_shift"].items()
-                },
+                probability_shift=shift,
                 expected_speedup=_speedup_text(
-                    measurement["class_before"], measurement["class_after"]
+                    measurement["class_before"],
+                    measurement["class_after"],
+                    shift,
                 ),
             ),
             priority=item.priority,
@@ -192,16 +230,16 @@ def _deterministic_sweep(request, baseline) -> list[ValidatedRecommendation]:
     results.sort(key=lambda r: r[0], reverse=True)
     recs = []
     for priority, (_, feature, value, raw) in enumerate(results[:5], start=1):
+        shift = {int(k): v for k, v in raw["probability_shift"].items()}
         recs.append(ValidatedRecommendation(
             action=f"Set {feature} to {value}",
             feature=feature, current_value=_current_value(request, feature),
             suggested_value=value,
             measured_impact=MeasuredImpact(
                 class_before=raw["class_before"], class_after=raw["class_after"],
-                probability_shift={int(k): v
-                                   for k, v in raw["probability_shift"].items()},
+                probability_shift=shift,
                 expected_speedup=_speedup_text(raw["class_before"],
-                                               raw["class_after"]),
+                                               raw["class_after"], shift),
             ),
             priority=priority, category="listing_details",
             rationale="Deterministic counterfactual sweep (LLM unavailable).",
