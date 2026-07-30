@@ -26,6 +26,12 @@
 
 </div>
 
+<p align="center">
+  <img src=".github/assets/demo.gif" alt="Adoption Accelerator demo: the input wizard, the prediction, the Dossier report, and the exported listing" width="100%" style="border-radius: 10px;" />
+  <br/>
+  <em>Wizard → prediction → the Dossier report → an exported, ready-to-use listing.</em>
+</p>
+
 ---
 
 ## 📖 Overview
