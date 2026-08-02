@@ -2,8 +2,7 @@
 """Reference data for the /meta endpoint: canonical class labels and the
 categorical option lists (breeds/colors/states) the frontend wizard needs.
 
-CSVs are read from app/api/assets so the API does not depend on the
-(soon-to-be-retired) Streamlit asset directory.
+CSVs are read from app/api/assets, which ships in the API container image.
 """
 
 from __future__ import annotations

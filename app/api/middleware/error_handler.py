@@ -1,7 +1,7 @@
 """Global exception handlers for the Adoption Accelerator API.
 
 Catches known exception types and returns structured JSON error responses
-so the Streamlit client always receives a predictable error shape:
+so every client receives a predictable error shape:
 
     {"error": true, "error_type": "...", "message": "...", "session_id": "..."}
 """

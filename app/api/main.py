@@ -7,7 +7,7 @@ Startup (lifespan):
   - Starts the job store TTL cleanup background thread.
   - All are stored in app.state for use by routers.
 
-CORS is configured to allow the Streamlit default origin (localhost:8501).
+CORS is configured to allow the Next.js dev origin (localhost:3000).
 
 Usage:
   uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
@@ -180,7 +180,7 @@ def create_app() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:8501"],
+        allow_origins=["http://localhost:3000"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -1,7 +1,7 @@
 """
 Visualization and statistical summary utilities for the Adoption Accelerator project.
 
-Shared across EDA notebooks (04, 05, 06) and the Streamlit frontend.
+Shared across EDA notebooks (04, 05, 06).
 All plotting functions return ``matplotlib.figure.Figure`` objects for downstream
 persistence via :func:`save_figure`.
 
