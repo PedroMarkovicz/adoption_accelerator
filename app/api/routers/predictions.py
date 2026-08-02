@@ -21,14 +21,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
-CLASS_LABELS = {
-    0: "Same-day",
-    1: "Within 1 week",
-    2: "Within 1 month",
-    3: "Within 1-3 months",
-    4: "100+ days",
-}
-
 
 @router.get("/recent", response_model=RecentPredictionsResponse)
 def get_recent_predictions(

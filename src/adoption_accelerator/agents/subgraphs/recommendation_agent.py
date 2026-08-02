@@ -46,11 +46,9 @@ logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
-_CLASS_LABELS = {
-    0: "adopted same day", 1: "adopted within 1 week",
-    2: "adopted within 1 month", 3: "adopted within 1-3 months",
-    4: "not adopted after 100 days",
-}
+from adoption_accelerator.target_labels import labels
+
+_CLASS_LABELS = labels("inline")
 
 
 class FinalRecommendationItem(BaseModel):

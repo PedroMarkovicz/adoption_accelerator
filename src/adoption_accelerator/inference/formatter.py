@@ -16,13 +16,9 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-CLASS_LABELS = {
-    0: "Same-day adoption",
-    1: "Adopted within 1 week",
-    2: "Adopted within 1 month",
-    3: "Adopted within 1-3 months",
-    4: "Not adopted (100+ days)",
-}
+from adoption_accelerator.target_labels import labels
+
+CLASS_LABELS = labels("display")
 
 
 def format_predictions(

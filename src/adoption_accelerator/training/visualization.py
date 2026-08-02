@@ -22,13 +22,9 @@ from adoption_accelerator.training.evaluation import compute_qwk
 
 logger = logging.getLogger(__name__)
 
-CLASS_LABELS = [
-    "Same day (0)",
-    "1-7 days (1)",
-    "8-30 days (2)",
-    "31-90 days (3)",
-    "100+ days (4)",
-]
+from adoption_accelerator.target_labels import ordered_labels
+
+CLASS_LABELS = ordered_labels("axis")
 
 
 def plot_confusion_matrix(

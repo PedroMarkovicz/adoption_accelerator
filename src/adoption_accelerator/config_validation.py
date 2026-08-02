@@ -11,6 +11,7 @@ import logging
 
 from adoption_accelerator.agents.llm.registry import load_models_config
 from adoption_accelerator.agents.runtime_config import load_node_timeouts
+from adoption_accelerator.target_labels import load_target_config
 
 logger = logging.getLogger(__name__)
 
@@ -23,4 +24,5 @@ def validate_all_configs() -> None:
     """
     load_models_config()
     load_node_timeouts()
+    load_target_config()
     logger.info("Startup: all configs validated.")

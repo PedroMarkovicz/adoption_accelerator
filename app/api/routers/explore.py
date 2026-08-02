@@ -24,13 +24,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/explore", tags=["explore"])
 
-CLASS_LABELS = {
-    "0": "Same-day",
-    "1": "Within 1 week",
-    "2": "Within 1 month",
-    "3": "Within 1-3 months",
-    "4": "100+ days",
-}
+from adoption_accelerator.target_labels import labels
+
+CLASS_LABELS = labels("short")
 
 
 @router.get("/distributions", response_model=DistributionsResponse)
@@ -69,7 +65,7 @@ def get_distributions(
     return DistributionsResponse(
         feature=feature,
         data=entry,
-        class_labels=CLASS_LABELS,
+        class_labels={str(k): v for k, v in CLASS_LABELS.items()},
     )
 
 

@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from adoption_accelerator.target_labels import labels
+
 logger = logging.getLogger(__name__)
 
 
@@ -267,13 +269,7 @@ def plot_calibration_curve(
     per_class = calibration_data["per_class"]
     n_classes = len(per_class)
 
-    default_labels = {
-        0: "Same day (0)",
-        1: "1-7 days (1)",
-        2: "8-30 days (2)",
-        3: "31-90 days (3)",
-        4: "100+ days (4)",
-    }
+    default_labels = labels("axis")
     if class_labels is None:
         class_labels = default_labels
 
@@ -345,13 +341,7 @@ def plot_error_analysis(
     -------
     matplotlib.figure.Figure
     """
-    default_labels = {
-        0: "Same day (0)",
-        1: "1-7 days (1)",
-        2: "8-30 days (2)",
-        3: "31-90 days (3)",
-        4: "100+ days (4)",
-    }
+    default_labels = labels("axis")
     if class_labels is None:
         class_labels = default_labels
 
@@ -471,13 +461,7 @@ def plot_per_class_shap(
     -------
     matplotlib.figure.Figure
     """
-    default_labels = {
-        0: "Same day (0)",
-        1: "1-7 days (1)",
-        2: "8-30 days (2)",
-        3: "31-90 days (3)",
-        4: "100+ days (4)",
-    }
+    default_labels = labels("axis")
     if class_labels is None:
         class_labels = default_labels
 

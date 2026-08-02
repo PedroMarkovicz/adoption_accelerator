@@ -28,13 +28,9 @@ METRICS_JSON = ROOT / "artifacts" / "models" / "tuned_v1" / "metrics.json"
 GLOBAL_IMP_JSON = ROOT / "reports" / "global_importance.json"
 OUT_DIR = ROOT / "artifacts" / "explore"
 
-CLASS_LABELS = {
-    0: "Same-day",
-    1: "Within 1 week",
-    2: "Within 1 month",
-    3: "Within 1-3 months",
-    4: "100+ days",
-}
+from adoption_accelerator.target_labels import labels
+
+CLASS_LABELS = labels("short")
 
 # Features to expose in the distribution explorer
 EXPLORE_FEATURES = {
