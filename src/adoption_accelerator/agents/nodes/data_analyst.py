@@ -29,12 +29,12 @@ from adoption_accelerator.agents.contracts import (
 )
 from adoption_accelerator.agents.llm.client import extract_usage, get_chat_model
 from adoption_accelerator.agents.llm.registry import resolve_role
+from adoption_accelerator.agents.runtime_config import node_timeout
 from adoption_accelerator.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-_TIMEOUT_SECONDS = 15.0
 
 
 class DataAnalystOutput(BaseModel):
@@ -149,7 +149,7 @@ async def data_analyst_node(state: AgentState) -> dict:
                 [("system", _load_prompt("data_analyst_system.txt")),
                  ("user", user_prompt)]
             ),
-            timeout=_TIMEOUT_SECONDS,
+            timeout=node_timeout("data_analyst"),
         )
         output: DataAnalystOutput = result["parsed"]
         raw = result["raw"]

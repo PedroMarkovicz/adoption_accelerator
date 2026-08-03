@@ -535,3 +535,36 @@ def test_normalize_name_capitalizes_when_the_token_was_capitalized():
 
 def test_normalize_name_keeps_declared_case_when_token_was_lowercase():
     assert _normalize_name("bebé sleeps", "bebe") == "bebe sleeps"
+
+
+async def test_synthesizer_consults_the_timeout_loader():
+    """Regression guard for the dead-config bug this task fixes: the node
+    must ask runtime_config.node_timeout for its own timeout by name and
+    pass that value through to asyncio.wait_for, not a hardcoded literal.
+    """
+    output = SynthesisOutput(
+        narrative="ok narrative for the report",
+        headline="ok headline",
+        optimized_description=None,
+    )
+
+    captured_timeouts = []
+
+    async def fake_wait_for(coro, timeout):
+        captured_timeouts.append(timeout)
+        return await coro
+
+    with patch(
+        "adoption_accelerator.agents.nodes.synthesizer.get_chat_model",
+        return_value=_model_returning(output),
+    ), patch(
+        "adoption_accelerator.agents.nodes.synthesizer.node_timeout",
+        return_value=12345.0,
+    ) as mock_node_timeout, patch(
+        "adoption_accelerator.agents.nodes.synthesizer.asyncio.wait_for",
+        side_effect=fake_wait_for,
+    ):
+        await synthesizer_node(make_state())
+
+    mock_node_timeout.assert_called_once_with("synthesizer")
+    assert captured_timeouts == [12345.0]

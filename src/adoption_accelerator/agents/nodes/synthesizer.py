@@ -21,12 +21,12 @@ from adoption_accelerator.agents.listing_facts import (
 )
 from adoption_accelerator.agents.llm.client import extract_usage, get_chat_model
 from adoption_accelerator.agents.llm.registry import resolve_role
+from adoption_accelerator.agents.runtime_config import node_timeout
 from adoption_accelerator.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-_TIMEOUT_SECONDS = 20.0
 
 # Visual-trait phrases that must be grounded in observed_traits when a
 # description mentions them. Deliberately narrow: every added pattern is
@@ -258,7 +258,7 @@ async def synthesizer_node(state: AgentState) -> dict:
         result = await asyncio.wait_for(
             model.ainvoke([("system", system),
                            ("user", _build_user_prompt(state, facts))]),
-            timeout=_TIMEOUT_SECONDS,
+            timeout=node_timeout("synthesizer"),
         )
         output: SynthesisOutput = result["parsed"]
         raw = result["raw"]

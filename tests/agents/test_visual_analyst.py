@@ -192,3 +192,38 @@ def test_system_prompt_forbids_assigning_a_sex():
     )
     assert "NEVER state or imply the animal's sex" in text
     assert "appeal_hooks" in text
+
+
+async def test_visual_analyst_consults_the_timeout_loader(png_file):
+    """Regression guard for the dead-config bug this task fixes: the node
+    must ask runtime_config.node_timeout for its own timeout by name and
+    pass that value through to asyncio.wait_for, not a hardcoded literal.
+    """
+    output = VisualAnalysisOutput(
+        photos=[], overall_visual_appeal=6, best_photo_index=0,
+        observed_traits=[], consistency_flags=[],
+        photo_strategy_summary="ok",
+    )
+    model, _ = _fake_model_returning(output)
+    state = {"request": make_request(images=[png_file]), "timestamp": "t"}
+
+    captured_timeouts = []
+
+    async def fake_wait_for(coro, timeout):
+        captured_timeouts.append(timeout)
+        return await coro
+
+    with patch(
+        "adoption_accelerator.agents.nodes.visual_analyst.get_chat_model",
+        return_value=model,
+    ), patch(
+        "adoption_accelerator.agents.nodes.visual_analyst.node_timeout",
+        return_value=12345.0,
+    ) as mock_node_timeout, patch(
+        "adoption_accelerator.agents.nodes.visual_analyst.asyncio.wait_for",
+        side_effect=fake_wait_for,
+    ):
+        await visual_analyst_node(state)
+
+    mock_node_timeout.assert_called_once_with("visual_analyst")
+    assert captured_timeouts == [12345.0]

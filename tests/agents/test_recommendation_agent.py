@@ -203,3 +203,49 @@ async def test_tool_call_budget_never_exceeds_max_tool_calls():
     ev = updates["recommendation_evidence"]
     assert ev.iterations_used == MAX_TOOL_CALLS
     assert any("budget" in n.lower() for n in ev.notes)
+
+
+async def test_recommendation_agent_consults_the_timeout_loader():
+    """Regression guard for the dead-config bug this task fixes: the node
+    must ask runtime_config.node_timeout for its own timeout by name and
+    pass that value through to asyncio.wait_for, not a hardcoded literal.
+    Covers both call sites: the ReAct loop and the structured finalize
+    call.
+    """
+    tool_call_msg = AIMessage(
+        content="",
+        tool_calls=[{
+            "name": "run_counterfactual",
+            "args": {"feature": "Fee", "value": "0"},
+            "id": "call_1",
+        }],
+        usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+    )
+    stop_msg = AIMessage(
+        content="Done testing.",
+        usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+    )
+    final = FinalRecommendations(items=[], rejected_hypotheses=[])
+    model = ScriptedToolModel([tool_call_msg, stop_msg], final)
+
+    captured_timeouts = []
+
+    async def fake_wait_for(coro, timeout):
+        captured_timeouts.append(timeout)
+        return await coro
+
+    with patch(
+        "adoption_accelerator.agents.subgraphs.recommendation_agent.get_chat_model",
+        return_value=model,
+    ), patch(
+        "adoption_accelerator.agents.subgraphs.recommendation_agent.node_timeout",
+        return_value=12345.0,
+    ) as mock_node_timeout, patch(
+        "adoption_accelerator.agents.subgraphs.recommendation_agent.asyncio.wait_for",
+        side_effect=fake_wait_for,
+    ):
+        await recommendation_agent_node(make_state())
+
+    assert mock_node_timeout.call_count == 2
+    assert all(c.args == ("recommendation_agent",) for c in mock_node_timeout.call_args_list)
+    assert captured_timeouts == [12345.0, 12345.0]

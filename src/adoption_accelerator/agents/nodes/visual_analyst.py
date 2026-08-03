@@ -27,12 +27,12 @@ from adoption_accelerator.agents.contracts import (
 )
 from adoption_accelerator.agents.llm.client import extract_usage, get_chat_model
 from adoption_accelerator.agents.llm.registry import resolve_role
+from adoption_accelerator.agents.runtime_config import node_timeout
 from adoption_accelerator.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-_TIMEOUT_SECONDS = 20.0
 MAX_IMAGES = 3
 
 
@@ -108,7 +108,7 @@ async def visual_analyst_node(state: AgentState) -> dict:
             model.ainvoke(
                 [("system", system_prompt), ("user", content)]
             ),
-            timeout=_TIMEOUT_SECONDS,
+            timeout=node_timeout("visual_analyst"),
         )
         output: VisualAnalysisOutput = result["parsed"]
         raw = result["raw"]

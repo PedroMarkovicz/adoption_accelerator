@@ -29,6 +29,11 @@ from adoption_accelerator.agents.contracts import (
 )
 from adoption_accelerator.agents.llm.client import extract_usage, get_chat_model
 from adoption_accelerator.agents.llm.registry import resolve_role
+from adoption_accelerator.agents.runtime_config import (
+    MAX_TOOL_CALLS,
+    SPEEDUP_EPSILON,
+    node_timeout,
+)
 from adoption_accelerator.agents.state import AgentState
 from adoption_accelerator.agents.tools.recommendation_tools import (
     ACTIONABLE_FEATURES,
@@ -40,8 +45,6 @@ from adoption_accelerator.agents.tools.recommendation_tools import (
 logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-_TIMEOUT_SECONDS = 60.0
-MAX_TOOL_CALLS = 8
 
 _CLASS_LABELS = {
     0: "adopted same day", 1: "adopted within 1 week",
@@ -63,11 +66,6 @@ class FinalRecommendationItem(BaseModel):
 class FinalRecommendations(BaseModel):
     items: list[FinalRecommendationItem] = Field(default_factory=list)
     rejected_hypotheses: list[str] = Field(default_factory=list)
-
-
-# Expected-class-value moves smaller than this are treated as noise rather
-# than as a real effect. Matches the scale of the ordinal target (0-4).
-_SPEEDUP_EPSILON = 1e-3
 
 
 def _expected_class_delta(probability_shift: dict[int, float]) -> float:
@@ -99,9 +97,9 @@ def _speedup_text(
                 f"to '{_CLASS_LABELS[class_after]}', which is slower")
 
     delta = _expected_class_delta(probability_shift)
-    if delta < -_SPEEDUP_EPSILON:
+    if delta < -SPEEDUP_EPSILON:
         return "improves class probabilities without changing the predicted class"
-    if delta > _SPEEDUP_EPSILON:
+    if delta > SPEEDUP_EPSILON:
         return ("shifts probability toward slower adoption without changing "
                 "the predicted class")
     return "no measurable change in the predicted probabilities"
@@ -275,7 +273,7 @@ async def recommendation_agent_node(state: AgentState) -> dict:
 
         used, messages, loop_usage = await asyncio.wait_for(
             _react_loop(model, tools, log, context, resolved),
-            timeout=_TIMEOUT_SECONDS,
+            timeout=node_timeout("recommendation_agent"),
         )
         total_usage["input_tokens"] += loop_usage["input_tokens"]
         total_usage["output_tokens"] += loop_usage["output_tokens"]
@@ -288,7 +286,7 @@ async def recommendation_agent_node(state: AgentState) -> dict:
                 "Provide your final recommendations now. Every item must cite "
                 "the measurement_id that validated it."
             ))]),
-            timeout=_TIMEOUT_SECONDS,
+            timeout=node_timeout("recommendation_agent"),
         )
         final: FinalRecommendations = result["parsed"]
         final_usage = extract_usage(result["raw"], resolved.model_key)

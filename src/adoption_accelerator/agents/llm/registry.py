@@ -14,9 +14,11 @@ from typing import Literal, Optional
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
+from adoption_accelerator import config
+
 VISION_REQUIRED_ROLES: frozenset[str] = frozenset({"visual_analyst"})
 
-_DEFAULT_CONFIG_PATH = Path("configs/agents/models.yaml")
+_DEFAULT_CONFIG_PATH = config.PROJECT_ROOT / "configs" / "agents" / "models.yaml"
 
 _config_cache: dict[Path, "ModelsConfig"] = {}
 

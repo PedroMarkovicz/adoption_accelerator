@@ -97,3 +97,50 @@ async def test_data_analyst_falls_back_on_llm_failure():
     assert ev.generated_by == "deterministic"
     assert ev.predicted_class == 2
     assert any(e.error_type == "llm_failure" for e in updates["errors"])
+
+
+async def test_data_analyst_consults_the_timeout_loader():
+    """Regression guard for the dead-config bug this task fixes: the node
+    must ask runtime_config.node_timeout for its own timeout by name and
+    pass that value through to asyncio.wait_for, not a hardcoded literal.
+    """
+    fake_structured = AsyncMock()
+    fake_structured.ainvoke.return_value = {
+        "parsed": DataAnalystOutput(
+            driver_readings=["Young age pushes adoption faster."],
+            uncertainty_reading="Probabilities are moderately spread.",
+        ),
+        "raw": AIMessage(
+            content="",
+            usage_metadata={
+                "input_tokens": 120,
+                "output_tokens": 40,
+                "total_tokens": 160,
+            },
+        ),
+        "parsing_error": None,
+    }
+    fake_model = SimpleNamespace(
+        with_structured_output=lambda schema, **kw: fake_structured
+    )
+
+    captured_timeouts = []
+
+    async def fake_wait_for(coro, timeout):
+        captured_timeouts.append(timeout)
+        return await coro
+
+    with patch(
+        "adoption_accelerator.agents.nodes.data_analyst.get_chat_model",
+        return_value=fake_model,
+    ), patch(
+        "adoption_accelerator.agents.nodes.data_analyst.node_timeout",
+        return_value=12345.0,
+    ) as mock_node_timeout, patch(
+        "adoption_accelerator.agents.nodes.data_analyst.asyncio.wait_for",
+        side_effect=fake_wait_for,
+    ):
+        await data_analyst_node(make_state())
+
+    mock_node_timeout.assert_called_once_with("data_analyst")
+    assert captured_timeouts == [12345.0]

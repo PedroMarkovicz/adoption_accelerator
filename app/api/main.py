@@ -25,6 +25,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from adoption_accelerator.agents.graph import compile_report_graph
+from adoption_accelerator.config_validation import validate_all_configs
 from adoption_accelerator.inference.serving import get_inference_pipeline
 from app.api.middleware.error_handler import register_error_handlers
 from app.api.routers import explore, health, meta, predict, predictions
@@ -114,6 +115,9 @@ def _compute_modality_breakdown(pipeline) -> dict[str, int]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load the ML pipeline, compile graphs, and start cleanup on startup."""
+    logger.info("Startup: validating configs ...")
+    validate_all_configs()
+
     logger.info("Startup: loading InferencePipeline ...")
     app.state.pipeline = get_inference_pipeline()
 
