@@ -20,55 +20,23 @@ from adoption_accelerator.inference.contracts import (
     PredictionResult,
 )
 from adoption_accelerator.inference.serving import get_inference_pipeline
+from adoption_accelerator.agents.tools.actionable_features import (
+    ACTIONABLE_FEATURES,
+    apply_change,
+    coerce,
+    current_value,
+)
 
 logger = logging.getLogger(__name__)
 
-# Copied from the old agents/tools/counterfactual_tool.py (same semantics).
-ACTIONABLE_FEATURES: dict[str, dict[str, Any]] = {
-    "PhotoAmt": {"description": "Number of photos in the listing"},
-    "VideoAmt": {"description": "Number of videos in the listing"},
-    "Vaccinated": {"description": "Pet vaccination status (1=Yes)"},
-    "Dewormed": {"description": "Pet deworming status (1=Yes)"},
-    "Sterilized": {"description": "Pet sterilization status (1=Yes)"},
-    "Fee": {"description": "Adoption fee amount"},
-    "Name": {"description": "Whether the pet has a name"},
-    "Quantity": {"description": "Number of pets in the listing"},
-}
 
-_INT_FEATURES = {"PhotoAmt", "VideoAmt", "Vaccinated", "Dewormed",
-                 "Sterilized", "Quantity"}
-
-
-def _coerce(feature: str, value: str) -> Any:
-    if feature in _INT_FEATURES:
-        return int(float(value))
-    if feature == "Fee":
-        return float(value)
-    return value  # Name
-
-
-def _mutate_request(request: PredictionRequest, changes: dict[str, Any]) -> PredictionRequest:
+def _mutate_request(
+    request: PredictionRequest, changes: dict[str, Any]
+) -> PredictionRequest:
     data = request.model_dump()
     for feature, value in changes.items():
-        if feature == "PhotoAmt":
-            data["images"] = [f"synthetic_{i}.jpg" for i in range(int(value))]
-        elif feature == "Name":
-            data["tabular"]["name"] = str(value) if value else None
-        else:
-            field = "video_amt" if feature == "VideoAmt" else feature.lower()
-            data["tabular"][field] = value
+        apply_change(data, feature, value)
     return PredictionRequest(**data)
-
-
-def _current_value(request: PredictionRequest, feature: str) -> str:
-    t = request.tabular
-    mapping = {
-        "PhotoAmt": len(request.images), "VideoAmt": t.video_amt,
-        "Vaccinated": t.vaccinated, "Dewormed": t.dewormed,
-        "Sterilized": t.sterilized, "Fee": t.fee,
-        "Name": t.name or "", "Quantity": t.quantity,
-    }
-    return str(mapping.get(feature, ""))
 
 
 class MeasurementLog:
@@ -112,7 +80,7 @@ def make_recommendation_tools(
                     f"features: {sorted(ACTIONABLE_FEATURES)}"
                 )}
         try:
-            coerced = {f: _coerce(f, str(v)) for f, v in changes.items()}
+            coerced = {f: coerce(f, str(v)) for f, v in changes.items()}
         except (ValueError, TypeError) as exc:
             return {"error": f"could not interpret value(s) for {list(changes)}: {exc}"}
         mutated = _mutate_request(request, coerced)
@@ -152,8 +120,8 @@ def make_recommendation_tools(
         return json.dumps({
             "feature": feature,
             "actionable": spec is not None,
-            "description": spec["description"] if spec else "not actionable",
-            "current_value": _current_value(request, feature),
+            "description": spec.description if spec else "not actionable",
+            "current_value": current_value(request, feature),
         })
 
     return [run_counterfactual, run_what_if, lookup_feature], log

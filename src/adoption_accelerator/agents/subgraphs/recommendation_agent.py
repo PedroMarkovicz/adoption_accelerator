@@ -35,10 +35,15 @@ from adoption_accelerator.agents.runtime_config import (
     node_timeout,
 )
 from adoption_accelerator.agents.state import AgentState
+from adoption_accelerator.agents.tools.actionable_features import (
+    SWEEP_MAX_RECOMMENDATIONS,
+    SWEEP_MIN_SHIFT,
+    current_value,
+    sweep_candidates,
+)
 from adoption_accelerator.agents.tools.recommendation_tools import (
     ACTIONABLE_FEATURES,
     MeasurementLog,
-    _current_value,
     make_recommendation_tools,
 )
 
@@ -186,7 +191,7 @@ def _finalize_items(
         validated.append(ValidatedRecommendation(
             action=item.action,
             feature=item.feature,
-            current_value=_current_value(request, item.feature),
+            current_value=current_value(request, item.feature),
             suggested_value=item.suggested_value,
             measured_impact=MeasuredImpact(
                 class_before=measurement["class_before"],
@@ -210,10 +215,8 @@ def _deterministic_sweep(request, baseline) -> list[ValidatedRecommendation]:
     """Fallback: measure the standard candidates without LLM curation."""
     tools, log = make_recommendation_tools(request, baseline)
     counterfactual = next(t for t in tools if t.name == "run_counterfactual")
-    candidates = [("Fee", "0"), ("Vaccinated", "1"), ("Sterilized", "1"),
-                  ("Dewormed", "1"), ("PhotoAmt", "5")]
     results = []
-    for feature, value in candidates:
+    for feature, value in sweep_candidates():
         raw = json.loads(counterfactual.invoke({"feature": feature, "value": value}))
         if "error" in raw:
             continue
@@ -221,15 +224,17 @@ def _deterministic_sweep(request, baseline) -> list[ValidatedRecommendation]:
             v for k, v in raw["probability_shift"].items()
             if int(k) < raw["class_before"]
         )
-        if raw["class_after"] < raw["class_before"] or shift_to_faster > 0.01:
+        if raw["class_after"] < raw["class_before"] or shift_to_faster > SWEEP_MIN_SHIFT:
             results.append((shift_to_faster, feature, value, raw))
     results.sort(key=lambda r: r[0], reverse=True)
     recs = []
-    for priority, (_, feature, value, raw) in enumerate(results[:5], start=1):
+    for priority, (_, feature, value, raw) in enumerate(
+        results[:SWEEP_MAX_RECOMMENDATIONS], start=1
+    ):
         shift = {int(k): v for k, v in raw["probability_shift"].items()}
         recs.append(ValidatedRecommendation(
             action=f"Set {feature} to {value}",
-            feature=feature, current_value=_current_value(request, feature),
+            feature=feature, current_value=current_value(request, feature),
             suggested_value=value,
             measured_impact=MeasuredImpact(
                 class_before=raw["class_before"], class_after=raw["class_after"],
