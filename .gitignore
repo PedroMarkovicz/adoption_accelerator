@@ -223,3 +223,6 @@ site/
 # ──────────────────────────────────────────────
 .docker/
 docker-compose.override.yml
+
+# Local agent/tooling scratch (never commit)
+.superpowers/
