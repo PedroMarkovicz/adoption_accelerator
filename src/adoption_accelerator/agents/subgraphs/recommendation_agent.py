@@ -226,7 +226,13 @@ def _deterministic_sweep(request, baseline) -> list[ValidatedRecommendation]:
         )
         if raw["class_after"] < raw["class_before"] or shift_to_faster > SWEEP_MIN_SHIFT:
             results.append((shift_to_faster, feature, value, raw))
-    results.sort(key=lambda r: r[0], reverse=True)
+    # -r[0] reproduces the previous descending-by-shift order; r[1] (the
+    # feature name) breaks ties explicitly. Python's sort is stable, so
+    # without this, two candidates with an equal measured shift_to_faster
+    # would keep whatever order the candidate table happened to insert
+    # them in, and priority (which drives card order in the report) would
+    # silently depend on table order rather than the measurement.
+    results.sort(key=lambda r: (-r[0], r[1]))
     recs = []
     for priority, (_, feature, value, raw) in enumerate(
         results[:SWEEP_MAX_RECOMMENDATIONS], start=1

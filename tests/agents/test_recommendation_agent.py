@@ -1,5 +1,6 @@
 """Tests for the bounded ReAct recommendation agent."""
 
+import json
 from unittest.mock import patch
 
 from langchain_core.messages import AIMessage
@@ -8,10 +9,12 @@ from adoption_accelerator.agents.contracts import (
     PredictionEvidence,
     RecommendationEvidence,
 )
+from adoption_accelerator.agents.subgraphs import recommendation_agent as ra_module
 from adoption_accelerator.agents.subgraphs.recommendation_agent import (
     MAX_TOOL_CALLS,
     FinalRecommendationItem,
     FinalRecommendations,
+    _deterministic_sweep,
     recommendation_agent_node,
 )
 from adoption_accelerator.contracts_test_helpers import make_request
@@ -249,3 +252,44 @@ async def test_recommendation_agent_consults_the_timeout_loader():
     assert mock_node_timeout.call_count == 2
     assert all(c.args == ("recommendation_agent",) for c in mock_node_timeout.call_args_list)
     assert captured_timeouts == [12345.0, 12345.0]
+
+
+class _FakeCounterfactualTool:
+    """Stand-in for the run_counterfactual tool: every candidate measures
+    the same shift_to_faster, so table order is the only thing that could
+    decide priority if the sort had no tie-break."""
+
+    name = "run_counterfactual"
+
+    def invoke(self, args):
+        feature = args["feature"]
+        return json.dumps({
+            "class_before": 3,
+            "class_after": 2,
+            "probability_shift": {
+                "0": 0.0, "1": 0.0, "2": 0.05, "3": -0.05, "4": 0.0,
+            },
+            "measurement_id": f"m_{feature}",
+        })
+
+
+def test_deterministic_sweep_breaks_ties_by_feature_name(monkeypatch):
+    """Regression guard: two candidates with an equal measured shift must
+    come back in a deterministic, table-order-independent sequence.
+    """
+
+    def fake_make_tools(request, baseline):
+        return [_FakeCounterfactualTool()], object()
+
+    monkeypatch.setattr(ra_module, "make_recommendation_tools", fake_make_tools)
+    # "Zeta" is inserted before "Alpha" on purpose: if the tie-break were
+    # missing, stable sort would keep this (wrong) order.
+    monkeypatch.setattr(
+        ra_module, "sweep_candidates", lambda: [("Zeta", "1"), ("Alpha", "1")]
+    )
+
+    recs = _deterministic_sweep(make_request(), baseline=None)
+
+    assert [r.feature for r in recs] == ["Alpha", "Zeta"]
+    assert recs[0].priority == 1
+    assert recs[1].priority == 2

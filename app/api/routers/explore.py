@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from adoption_accelerator.target_labels import labels
 from app.api.schemas.responses import (
     DistributionEntry,
     DistributionsResponse,
@@ -23,10 +24,6 @@ from app.api.schemas.responses import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/explore", tags=["explore"])
-
-from adoption_accelerator.target_labels import labels
-
-CLASS_LABELS = labels("short")
 
 
 @router.get("/distributions", response_model=DistributionsResponse)
@@ -62,10 +59,11 @@ def get_distributions(
         by_class=by_class,
     )
 
+    class_labels = labels("short")
     return DistributionsResponse(
         feature=feature,
         data=entry,
-        class_labels={str(k): v for k, v in CLASS_LABELS.items()},
+        class_labels={str(k): v for k, v in class_labels.items()},
     )
 
 

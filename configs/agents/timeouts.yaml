@@ -1,9 +1,9 @@
 # Per-node timeout configuration (seconds).
+# Only nodes that make an awaited LLM call (wrapped in asyncio.wait_for)
+# belong here. orchestrator, inference and aggregator are synchronous and
+# have nothing to await, so they are intentionally absent.
 node_timeouts:
-  orchestrator: 5
-  inference: 30
   visual_analyst: 20
   data_analyst: 15
   recommendation_agent: 60
   synthesizer: 20
-  aggregator: 5

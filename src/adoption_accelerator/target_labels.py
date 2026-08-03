@@ -8,7 +8,7 @@ from here too.
 This deliberately reverses the note in ``app/api/schemas/enums.py`` about
 keeping the API layer free of any ML-package dependency. One validated
 owner is worth more than that separation, which in practice produced
-eight copies in four renderings.
+eleven copies in four renderings.
 """
 
 from __future__ import annotations

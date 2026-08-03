@@ -18,16 +18,18 @@ from pydantic import BaseModel, model_validator
 
 from adoption_accelerator import config
 
-# The node set compiled in agents/graph.py. A timeout config that does not
-# cover exactly these names is a configuration error, not a default.
-GRAPH_NODES: frozenset[str] = frozenset({
-    "orchestrator",
-    "inference",
+# Only the nodes that make an awaited LLM call (and wrap it in
+# asyncio.wait_for) can honour a timeout. orchestrator, inference and
+# aggregator are plain synchronous functions with nothing to await, so a
+# timeout entry for them would be decorative: editing it would silently
+# do nothing, which is the exact defect this module exists to eliminate.
+# A timeout config that does not cover exactly these names is a
+# configuration error, not a default.
+TIMED_NODES: frozenset[str] = frozenset({
     "visual_analyst",
     "data_analyst",
     "recommendation_agent",
     "synthesizer",
-    "aggregator",
 })
 
 # Bounded ReAct budget for the recommendation agent. Raising this raises
@@ -51,12 +53,12 @@ class NodeTimeouts(BaseModel):
     @model_validator(mode="after")
     def _validate_node_coverage(self) -> "NodeTimeouts":
         configured = set(self.node_timeouts)
-        unknown = configured - GRAPH_NODES
+        unknown = configured - TIMED_NODES
         if unknown:
             raise ValueError(
                 f"unknown node(s) in timeouts config: {sorted(unknown)}"
             )
-        missing = GRAPH_NODES - configured
+        missing = TIMED_NODES - configured
         if missing:
             raise ValueError(
                 f"missing timeout for graph node(s): {sorted(missing)}"

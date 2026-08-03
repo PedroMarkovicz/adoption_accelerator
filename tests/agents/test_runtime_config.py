@@ -7,8 +7,6 @@ had no effect and gave no sign of having no effect.
 
 from __future__ import annotations
 
-import textwrap
-
 import pytest
 import yaml
 
@@ -22,9 +20,9 @@ def _clear_cache():
     runtime_config.clear_runtime_config_cache()
 
 
-def test_shipped_config_covers_every_graph_node():
+def test_shipped_config_covers_every_timed_node():
     cfg = runtime_config.load_node_timeouts()
-    assert set(cfg.node_timeouts) == set(runtime_config.GRAPH_NODES)
+    assert set(cfg.node_timeouts) == set(runtime_config.TIMED_NODES)
 
 
 def test_every_timeout_is_positive():
@@ -35,7 +33,7 @@ def test_every_timeout_is_positive():
 
 def test_editing_the_yaml_changes_the_effective_timeout(tmp_path):
     """The test that would have caught the dead config."""
-    payload = {"node_timeouts": {node: 3 for node in runtime_config.GRAPH_NODES}}
+    payload = {"node_timeouts": {node: 3 for node in runtime_config.TIMED_NODES}}
     path = tmp_path / "timeouts.yaml"
     path.write_text(yaml.safe_dump(payload), encoding="utf-8")
 
@@ -44,7 +42,7 @@ def test_editing_the_yaml_changes_the_effective_timeout(tmp_path):
 
 
 def test_missing_node_is_rejected(tmp_path):
-    payload = {"node_timeouts": {"orchestrator": 5}}
+    payload = {"node_timeouts": {"visual_analyst": 5}}
     path = tmp_path / "timeouts.yaml"
     path.write_text(yaml.safe_dump(payload), encoding="utf-8")
 
@@ -53,7 +51,7 @@ def test_missing_node_is_rejected(tmp_path):
 
 
 def test_unknown_node_is_rejected(tmp_path):
-    payload = {"node_timeouts": {node: 5 for node in runtime_config.GRAPH_NODES}}
+    payload = {"node_timeouts": {node: 5 for node in runtime_config.TIMED_NODES}}
     payload["node_timeouts"]["not_a_node"] = 5
     path = tmp_path / "timeouts.yaml"
     path.write_text(yaml.safe_dump(payload), encoding="utf-8")
